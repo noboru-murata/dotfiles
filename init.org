@@ -1,15 +1,24 @@
 #+TITLE: init file for emacs
 #+AUTHOR: Noboru Murata
 #+EMAIL: noboru.murata@gmail.com
-#+DATE: 2020.05.05 15:17:59
+#+DATE: 2020.05.05 15:33:36
 #+STARTUP: hidestars content
 #+OPTIONS: date:t H:4 num:nil toc:nil \n:nil
 #+OPTIONS: @:t ::t |:t ^:t -:t f:t *:t TeX:t LaTeX:t 
 #+OPTIONS: skip:nil d:nil todo:t pri:nil tags:not-in-toc
 #+PROPERTY: header-args :tangle "~/etc/emacs.d/init.el"
 
+* 基本方針
+  - 書き直したら C-c C-v C-t (tangle)
+  - packageは全てstraight.elの管理下に
+  - use-package に fallback しているが，とりあえず明示
+  - 記述がばらばらなので随時整理
+  - org-mode の設定は進行中
+  - auctex は straight の挙動が不安定?なので手動
+  - dired-x はよくわからない
+
 * 初期設定
-** file header
+** ファイルヘッダ
 #+begin_src emacs-lisp
 ;;; -*- mode: emacs-lisp; coding: utf-8-emacs-unix; indent-tabs-mode: nil -*-
 
@@ -983,7 +992,6 @@ _vr_ reset      ^^                       ^^                 ^^
 #+end_src
 
 * COMMENT Local file settings for Emacs
-
 # Local Variables:
 # time-stamp-line-limit: 1000
 # time-stamp-format: "%04y.%02m.%02d %02H:%02M:%02S"
