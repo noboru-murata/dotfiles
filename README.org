@@ -1,7 +1,7 @@
 #+TITLE: start-up files 
 
-* init.org (emacs.d/init.el)
+* DONE init.org
   package は straight.el で管理
 
-* zsh.org (TODO)
+* TODO zsh.org
   いずれ書く
