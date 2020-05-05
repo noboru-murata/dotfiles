@@ -1,0 +1,6 @@
+#+TITLE: start-up files 
+
+* init.org (emacs.d/init.el)
+  - package は straight.el で管理
+  - org-mode の設定は進行中
+  - auctex は straight の挙動が不安定?なので手動

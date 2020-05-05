@@ -1,0 +1,996 @@
+#+TITLE: init file for emacs
+#+AUTHOR: Noboru Murata
+#+EMAIL: noboru.murata@gmail.com
+#+DATE: 2020.05.05 15:17:59
+#+STARTUP: hidestars content
+#+OPTIONS: date:t H:4 num:nil toc:nil \n:nil
+#+OPTIONS: @:t ::t |:t ^:t -:t f:t *:t TeX:t LaTeX:t 
+#+OPTIONS: skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+PROPERTY: header-args :tangle "~/etc/emacs.d/init.el"
+
+* 初期設定
+** file header
+#+begin_src emacs-lisp
+;;; -*- mode: emacs-lisp; coding: utf-8-emacs-unix; indent-tabs-mode: nil -*-
+
+;; Copyright (C) 2002-2020, mura
+
+;; Author: noboru.murata@gmail.com
+;; Maintainer: noboru.murata@gmail.com
+;; Keywords: emacs initialization
+#+end_src
+
+** straight.el
+#+begin_src emacs-lisp
+;;; bootstrap for straight.el
+(defvar bootstrap-version)
+(let ((bootstrap-file
+       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
+      (bootstrap-version 5))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/raxod502/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
+
+;; fallback to use-package 
+(straight-use-package 'use-package)
+(setq straight-use-package-by-default t)
+
+;; el-patch
+(straight-use-package 'el-patch)
+#+end_src
+
+** 環境の違いを吸収
+#+begin_src emacs-lisp
+;;; for various environments
+
+;; if user-emacs-directory is not defined (before Emacs 22)
+(unless (boundp 'user-emacs-directory)
+  (defvar user-emacs-directory (expand-file-name "~/.emacs.d/")))
+
+;; local function for load-path
+(defun add-to-load-path (&rest paths)
+  (let (path)
+    (dolist (path paths paths)
+      (let ((default-directory
+              (expand-file-name (concat user-emacs-directory path))))
+        (add-to-list 'load-path default-directory)
+        (if (fboundp 'normal-top-level-add-subdirs-to-load-path)
+            (normal-top-level-add-subdirs-to-load-path))))))
+(add-to-load-path "local") ; for local lisp files 
+
+;; functions for get environments
+(defun x->bool (elt) (not (not elt)))
+(defvar emacs22-p (equal emacs-major-version 22))
+(defvar emacs23-p (equal emacs-major-version 23))
+(defvar emacs24-p (equal emacs-major-version 24))
+(defvar darwin-p (eq system-type 'darwin))
+(defvar ns-p (featurep 'ns))
+(defvar carbon-p (and (eq window-system 'mac) emacs22-p))
+(defvar mac-p (and (eq window-system 'mac) (or emacs23-p emacs24-p)))
+(defvar linux-p (eq system-type 'gnu/linux))
+(defvar colinux-p (when linux-p
+                    (let ((file "/proc/modules"))
+                      (and
+                       (file-readable-p file)
+                       (x->bool
+                        (with-temp-buffer
+                          (insert-file-contents file)
+                          (goto-char (point-min))
+                          (re-search-forward "^cofuse\.+" nil t)))))))
+(defvar cygwin-p (eq system-type 'cygwin))
+(defvar nt-p (eq system-type 'windows-nt))
+(defvar meadow-p (featurep 'meadow))
+(defvar windows-p (or cygwin-p nt-p meadow-p))
+#+end_src
+
+** 文字コードの設定
+#+begin_src emacs-lisp
+;;; use utf-8 encoding
+(set-language-environment  'utf-8)
+(prefer-coding-system 'utf-8)
+(set-default-coding-systems 'utf-8-unix)
+(cond
+ (mac-p ; for HFS+ file format (MacOS X)nn
+  (use-package ucs-normalize :straight nil)
+  ;; (require 'ucs-normalize)
+  (setq file-name-coding-system 'utf-8-hfs)
+  (setq locale-coding-system 'utf-8-hfs))
+ (windows-p ; for Windos
+  (setq file-name-coding-system 'sjis)
+  (setq locale-coding-system 'utf-8))
+ (t ; otherwise
+  (setq file-name-coding-system 'utf-8)
+  (setq locale-coding-system 'utf-8)))
+#+end_src
+
+** 以下は未使用
+;; @see https://bitbucket.org/sakito/dot.emacs.d/
+;;(setq user-full-name "xxx")
+;;(setq user-mail-address "xxx@xxx.com")
+;;(setq debug-on-error t) ; debug on
+
+;; ;; @see https://nukosuke.hatenablog.jp/entry/straight-el
+;; ;; init-loaderをインストール&読み込み
+;; (use-package init-loader)
+;; ;; ~/.emacs.d/init/ 以下のファイルを全部読み込む
+;; (init-loader-load "~/.emacs.d/local")
+
+** 参考サイト
+   - https://github.com/raxod502/straight.el
+   - https://nukosuke.hatenablog.jp/entry/straight-el
+   - https://bitbucket.org/sakito/dot.emacs.d/
+   - http://github.com/elim/dotemacs/blob/master/init.el
+
+* 基本設定
+** basics
+#+begin_src emacs-lisp
+;;; basics
+
+;; swap delete and backspace
+(keyboard-translate ?\C-h ?\C-?)
+
+;; display digital clock
+;;(display-time)
+
+;; add time stamps 
+(add-hook 'before-save-hook 'time-stamp)
+
+;; make it easier
+;; (global-set-key "\C-c$" 'toggle-truncate-lines)
+
+;; make the sequence "C-x w" execute the `what-line' commmand, 
+;;(global-set-key "\C-xw" 'what-line)
+(line-number-mode t)
+(column-number-mode t)
+
+;; show parethesis
+(if (fboundp 'show-paren-mode)
+    (show-paren-mode t))
+;; show marked resion
+(setq transient-mark-mode t)
+
+;; set up auto fill mode for text mode
+;; (setq text-mode-hook
+;;       '(lambda () (auto-fill-mode 1)))
+;; (remove-hook 'text-mode-hook #'turn-on-auto-fill)
+
+;; function for full screen 
+(defun toggle-fullscreen ()
+  "Toggle full screen"
+  (interactive)
+  (set-frame-parameter
+   nil 'fullscreen
+   (when (not (frame-parameter nil 'fullscreen)) 'fullboth)))
+(tool-bar-mode 0)
+(scroll-bar-mode 0)
+(toggle-fullscreen)
+
+;; set up for frame spliting
+(setq split-height-threshold 80)
+(setq split-width-threshold 80)
+(setq ns-pop-up-frames nil) ; disable frame pop-up
+
+;; set up for path and environment variables
+(dolist (dir (list
+	      "/sbin"
+	      "/usr/sbin"
+	      "/bin"
+	      "/usr/bin"
+	      "/opt/local/bin"
+	      "/usr/local/bin"
+	      "/Library/TeX/texbin"
+	      (expand-file-name "~/bin")
+	      (expand-file-name "bin" user-emacs-directory)
+	      ))
+  (when (and (file-exists-p dir) (not (member dir exec-path)))
+    (setenv "PATH" (concat dir ":" (getenv "PATH")))
+    (setq exec-path (append (list dir) exec-path))))
+(setenv "MANPATH"
+        (concat "/usr/local/man:/usr/share/man:"
+                "/Developer/usr/share/man:"
+                "/Applications/Xcode.app/Contents/Developer/usr/share/man:"
+                "/opt/local/share/man:"
+                (getenv "MANPATH")))
+(setenv "TEXINPUTS"
+        (concat ".:/Users/mura/lib/tex/inputs//:"
+                (getenv "TEXINPUTS")))
+(setenv "TEXFONTS"
+        (concat ".:/Users/mura/Library/Fonts:"
+                (getenv "TEXFONTS")))
+(setenv "BIBINPUTS"
+        (concat ".:/Users/mura/lib/tex/bib:"
+                (getenv "BIBINPUTS")))
+(setenv "DISPLAY" "localhost")
+(setenv "SSH_AUTH_SOCK" (getenv "SSH_AUTH_SOCK"))
+(setenv "LC_ALL" "ja_JP.UTF-8")
+(setq system-time-locale "C")
+;; for gabling?
+;;(set-locale-environment "utf-8")
+;;(setenv "LANG" "ja_JP.UTF-8")
+
+;; speedbar in frame
+(use-package sr-speedbar
+  :config
+  (setq sr-speedbar-right-side nil)
+  )
+
+;; activate dired-x
+;; (add-hook 'dired-load-hook
+;;           (lambda ()
+;;             (load "dired-x")
+;;             ;; Set dired-x global variables here.  For example:
+;;             ;; (setq dired-guess-shell-gnutar "gtar")
+;;             ;; (setq dired-x-hands-off-my-keys nil)
+;;             ))
+;; (add-hook 'dired-mode-hook
+;;           (lambda ()
+;;             ;; Set dired-x buffer-local variables here.  For example:
+;;             ;; (dired-omit-mode 1)
+;;             ))
+;; https://qiita.com/l3msh0/items/8665122e01f6f5ef502f
+;; diredを2つのウィンドウで開いている時に、デフォルトの移動orコピー先をもう一方のdiredで開いているディレクトリにする
+(setq dired-dwim-target t)
+;; ディレクトリを再帰的にコピーする
+(setq dired-recursive-copies 'always)
+;; diredバッファでC-sした時にファイル名だけにマッチするように
+(setq dired-isearch-filenames t)
+#+end_src
+
+* 表示関係
+** fonts
+#+begin_src emacs-lisp
+;;; fonts
+(let* ((font-family "Source Han Code JP") ;; "Menlo"
+       (font-size 20)
+       (font-height (* font-size 10))
+       (jp-font-family "Source Han Code JP")) ;; "ヒラギノ角ゴ ProN"
+  (set-face-attribute 'default nil :family font-family :height font-height)
+  (let ((name (frame-parameter nil 'font))
+	(jp-font-spec (font-spec :family jp-font-family))
+	(jp-characters '(katakana-jisx0201
+			 cp932-2-byte
+			 japanese-jisx0212
+			 japanese-jisx0213-2
+			 japanese-jisx0213.2004-1))
+	(font-spec (font-spec :family font-family))
+	(characters '((?\u00A0 . ?\u00FF)    ; Latin-1
+		      (?\u0100 . ?\u017F)    ; Latin Extended-A
+		      (?\u0180 . ?\u024F)    ; Latin Extended-B
+		      (?\u0250 . ?\u02AF)    ; IPA Extensions
+		      (?\u0370 . ?\u03FF)))) ; Greek and Coptic
+    (dolist (jp-character jp-characters)
+      (set-fontset-font name jp-character jp-font-spec))
+    (dolist (character characters)
+      (set-fontset-font name character font-spec))
+    ;; (add-to-list 'face-font-rescale-alist (cons jp-font-family 1.2)) ;; for Hiragino
+    ))
+#+end_src
+
+** theme
+   - https://github.com/whatyouhide/emacs.d/blob/master/init.el
+#+begin_src emacs-lisp
+;;; theme
+(use-package afternoon-theme     :straight t :defer t)
+(use-package atom-one-dark-theme :straight t :defer t)
+(use-package darkokai-theme      :straight t :defer t)
+;; (use-package github-theme        :straight t :defer t)
+;; (use-package monokai-theme       :straight t :defer t)
+(use-package paganini-theme      :straight t :defer t)
+;; (use-package solarized-theme     :straight t :defer t)
+;; (use-package sublime-themes      :straight t :defer t)
+;; (use-package zenburn-theme       :straight t :defer t)
+;; (use-package org-beautify-theme  :straight t :defer t)
+(use-package color-theme-sanityinc-tomorrow :straight t :defer t)
+(use-package doom-themes :straight t
+  :config
+  ;; Global settings (defaults)
+  (setq doom-themes-enable-bold t    ; if nil, bold is universally disabled
+        doom-themes-enable-italic t) ; if nil, italics is universally disabled
+  ;;  (load-theme 'doom-one t) ; later
+  
+  ;; Enable flashing mode-line on errors
+  (doom-themes-visual-bell-config)
+  
+  ;; Enable custom neotree theme (all-the-icons must be installed!)
+  (doom-themes-neotree-config)
+  ;; or for treemacs users
+  (setq doom-themes-treemacs-theme "doom-colors") ; use the colorful treemacs theme
+  (doom-themes-treemacs-config)
+  
+  ;; Corrects (and improves) org-mode's native fontification.
+  (doom-themes-org-config))
+
+;; cycle custom theme https://qiita.com/minoruGH/items/d644cb16d9aa8f8a32a6
+(setq my-themes (list 'doom-dracula
+		      'doom-Iosvkem
+		      'doom-one
+;;		      'doom-city-lights
+		      'doom-nord
+		      'doom-spacegrey
+;;		      'doom-opera
+;;		      'doom-molokai
+;;		      'doom-fairy-floss
+;;		      'atom-one-dark
+;;		      'afternoon
+;;		      'darkokai
+;;		      'paganini
+		      )) 
+;;(setq my-themes (list 'doom-dracula 'atom-one-dark 'afternoon 'darkokai 'paganini)) 
+(setq curr-theme my-themes)
+(defun my-theme-cycle ()
+  "Cycle custom theme."
+  (interactive)
+  (disable-theme (car curr-theme)) 
+  (setq curr-theme (cdr curr-theme))
+  (if (null curr-theme) (setq curr-theme my-themes))
+  (load-theme (car curr-theme) t)
+  (message "%s" (car curr-theme)))
+(global-set-key [f7] 'my-theme-cycle)
+(setq curr-theme my-themes)
+(load-theme (car curr-theme) t)
+#+end_src
+
+* skk
+#+begin_src emacs-lisp
+;;; skk
+(use-package ddskk :straight t
+  :defer t
+  :bind (("C-x C-j" . skk-mode)
+	 ("C-x j"   . skk-mode)
+	 ("C-x C-o" . skk-toggle-kutouten))
+  :init
+  (setq default-input-method "japanese-skk")
+  (setq skk-byte-compile-init-file nil)
+  (setq skk-user-directory "~/.ddskk")
+  :config
+  ;; (require 'skk-study)
+  (use-package skk-study :straight nil) 
+  )
+#+end_src
+
+** migemo
+   - https://uwabami.github.io/cc-env/Emacs.html
+#+begin_src emacs-lisp
+;;; migemo
+(use-package migemo
+  :if (executable-find "cmigemo")
+  :config
+  (setq migemo-command "cmigemo"
+        migemo-options '("-q" "--emacs")
+        migemo-dictionary "/usr/local/share/migemo/utf-8/migemo-dict"
+        migemo-user-dictionary nil
+        migemo-regex-dictionary nil
+        migemo-coding-system 'utf-8-unix)
+  (migemo-init)
+  )
+#+end_src
+
+** Google Translate
+#+begin_src emacs-lisp
+;;; Google Translate
+(use-package google-translate
+  :config
+  (require 'google-translate-smooth-ui)
+  (setq google-translate-translation-directions-alist
+        '(("en" . "ja") ("de" . "ja") ("ja" . "en") ("ja" . "de")))
+  )
+(global-set-key "\C-cT" 'google-translate-smooth-translate)
+;; from rubikichi?
+(defvar google-translate-english-chars "[:ascii:]’“”–"
+  "これらの文字が含まれているときは英語とみなす")
+(defun google-translate-enja-or-jaen (&optional string)
+  "regionか、現在のセンテンスを言語自動判別でGoogle翻訳する。"
+  (interactive)
+  (setq string
+        (cond ((stringp string) string)
+              (current-prefix-arg
+               (read-string "Google Translate: "))
+              ((use-region-p)
+               (buffer-substring (region-beginning) (region-end)))
+              (t
+               (save-excursion
+                 (let (s)
+                   (forward-char 1)
+                   (backward-sentence)
+                   (setq s (point))
+                   (forward-sentence)
+                   (buffer-substring s (point)))))))
+  (let* ((asciip (string-match
+                  (format "\\`[%s]+\\'" google-translate-english-chars)
+                  string)))
+    (run-at-time 0.1 nil 'deactivate-mark)
+    (google-translate-translate
+     (if asciip "en" "ja")
+     (if asciip "ja" "en")
+     string)))
+(global-set-key (kbd "C-c t") 'google-translate-enja-or-jaen)
+;; revised https://qiita.com/akicho8/items/d7b84ee2cd98b2073a61
+(defun google-translate-replace-enja-or-jaen (&optional string)
+  "regionか、現在のセンテンスを言語自動判別でGoogle翻訳する。"
+  (interactive)
+  (setq string
+        (cond ((stringp string) string)
+              (current-prefix-arg
+               (read-string "Google Translate: "))
+              ((use-region-p)
+               (prog1
+                   (buffer-substring (region-beginning) (region-end))
+                 ;; ↓置き換えたいので翻訳元は削除する (念のためキルリングに入れておく)
+                 (kill-region (region-beginning) (region-end))))
+	      (t
+	       (save-excursion
+		 (let (s)
+		   (forward-char 1)
+		   (backward-sentence)
+		   (setq s (point))
+		   (forward-sentence)
+		   (buffer-substring s (point)))))))
+  (let* ((asciip (string-match
+		  (format "\\`[%s]+\\'" google-translate-english-chars)
+		  string)))
+    (run-at-time 0.1 nil 'deactivate-mark)
+    (google-translate-translate
+     (if asciip "en" "ja")
+     (if asciip "ja" "en")
+     string
+     'current-buffer))) ; ← カーソル位置にペーストする
+(global-set-key (kbd "C-c r") 'google-translate-replace-enja-or-jaen)
+;; https://qiita.com/akicho8/items/cae976cb3286f51e4632
+(defun google-translate-json-suggestion (json)
+  "Retrieve from JSON (which returns by the
+`google-translate-request' function) suggestion. This function
+does matter when translating misspelled word. So instead of
+translation it is possible to get suggestion."
+  (let ((info (aref json 7)))
+    (if (and info (> (length info) 0))
+        (aref info 1)
+      nil)))    
+;;
+(use-package popwin :straight t)
+(setq display-buffer-function 'popwin:display-buffer)
+(setq popwin:popup-window-position 'bottom)
+(push '("*quickrun*") popwin:special-display-config)
+(push '("*Google Translate*") popwin:special-display-config)
+(push '("*latex-math-preview-expression*") popwin:special-display-config)
+#+end_src
+
+
+* TeX関係
+** auctex
+#+begin_src emacs-lisp
+;;; auctex
+(use-package auctex
+  :straight (auctex :local-repo "auctex")
+  :defer t
+  :init
+  ;; @see http://miyazakikenji.wordpress.com/2013/06/21/gnupack-の-emacs-に-auctex/
+  (add-hook 'LaTeX-mode-hook 'TeX-PDF-mode)
+  (add-hook 'LaTeX-mode-hook 'auctex-latexmk-setup)
+  (add-hook 'LaTeX-mode-hook 'LaTeX-math-mode)
+  (add-hook 'LaTeX-mode-hook 'outline-minor-mode)
+  ;; @see http://stackoverflow.com/questions/14629198/redefine-auctex-font-and-compile-keybindings
+  (defun my-LaTeX-hook ()
+    (local-set-key "\C-c\C-t" 'TeX-command-master)
+    (setq TeX-default-mode 'japanese-latex-mode)
+    ;;  (setq TeX-engine-alist TeX-engine-alist-builtin)
+    (setq TeX-engine 'luatex))
+  (add-hook 'LaTeX-mode-hook 'my-LaTeX-hook)
+  ;; for skk
+  (defun my-TeX-insert-dollar ()
+    (interactive) (TeX-insert-dollar 2) (backward-char 1))
+  (add-hook 'skk-mode-hook
+            (lambda ()
+              (if (eq major-mode 'latex-mode)
+                  (progn
+                    (define-key skk-j-mode-map "\\" 'self-insert-command)
+                    (define-key skk-j-mode-map "$" 'my-TeX-insert-dollar)
+                    (define-key skk-latin-mode-map "$" 'my-TeX-insert-dollar)))
+              ))
+  ;; reftex
+  (add-hook 'LaTeX-mode-hook 'turn-on-reftex)
+  :config
+  (setq TeX-view-program-list '(("DVIviewer" "dviout %o")
+				("PDFviewer" "open %o")))
+  (setq TeX-view-program-selection '((output-dvi "DVIviewer")
+                                     (output-pdf "PDFviewer")))
+  (setq font-latex-fontify-sectioning 1.0)
+  (setq font-latex-fontify-script nil)
+  (setq TeX-electric-sub-and-superscript t)
+  ;; RefTeX with AUCTeX
+  (setq reftex-plug-into-AUCTeX t)
+  ;; kinsoku.el
+  (setq kinsoku-limit 10)
+  ;; 数式のラベル作成時にも自分でラベルを入力できるようにする
+  (setq reftex-insert-label-flags '("s" "sfte"))
+  ;; \eqrefを使う
+  (setq reftex-label-alist
+	'((nil ?e nil "\\eqref{%s}" nil nil)))
+  (setq reftex-default-bibliography '("~/lib/tex/bib/refs.bib"))
+  )
+(use-package auctex-latexmk
+  :straight (auctex-latexmk :local-repo "auctex-latexmk")
+  :after (auctex))
+#+end_src
+
+;; RefTeXで使用するbibファイルを指定する
+;; (setq reftex-default-bibliography '("~/foo.bib" "~/bar.bib"))
+;; https://emacs.stackexchange.com/questions/40589/
+;; (setq TeX-outline-extra '(("\\\\begin{frame}[{\[].+" 5)))
+;; https://emacs.stackexchange.com/questions/3072/
+;; extra outline headers 
+;; (setq TeX-outline-extra
+;; 	'(("%chapter" 1)
+;;         ("%section" 2)
+;; 	  ("frametitle" 1)
+;;         ("\\\\frametitle" 2)))
+;;   ;; :straight (auctex-latexmk :type git :host github
+;;   ;; 			    :repo "tom-tan/auctex-latexmk")
+;;   )
+;; (straight-use-package '(auctex-latexmk :local-repo "auctex-latexmk"))
+
+** bibtex
+#+begin_src emacs-lisp
+;;; bibtex mode
+(use-package bibtex-mode :straight t
+  :mode "\\.bib\\'"
+  :commands (ebib)
+  :init
+  (add-hook 'bibtex-mode-hook
+	    #'(lambda () (auto-fill-mode 0)))
+  :custom
+  (bibtex-dialect "biblatex")
+  (bibtex-mode-user-optional-fields 
+   '("sortname" "keywords" "abstract" "annotation" "file"))
+  (bibtex-user-optional-fields
+   '(("sortname" "for sorting Japanese names (ignored)")
+     ("keywords" "Personal Keywords (ignored)")
+     ("abstract" "If available (ignored)")
+     ("annotation" "Personal annotation (ignored)")
+     ("file" "local file location (ignored)")))
+  (bibtex-autokey-names 1)
+  (bibtex-autokey-names-stretch 2)
+  (bibtex-autokey-additional-names "_etal")
+  (bibtex-autokey-name-separator "")
+  (bibtex-autokey-year-length 4)
+  (bibtex-autokey-titlewords 0)
+  (bibtex-autokey-titlewords-stretch 0)
+  (bibtex-autokey-name-year-separator "")
+  (bibtex-autokey-preserve-case t)
+  (bibtex-autokey-name-case-convert-function 'identity)
+  )
+#+end_src
+
+** ebib
+#+begin_src emacs-lisp
+;;; ebib
+(use-package ebib :straight t
+  :defer t
+  :bind (("C-c e" . ebib))
+  :custom
+  (ebib-bibtex-dialect "biblatex")
+  (ebib-bib-search-dirs "~/lib/tex/bib")
+  (ebib-preload-bib-files '("~/lib/tex/bib/papers.bib"))
+  (ebib-file-search-dirs '("~/Documents/Bibliotheque/mendeley"))
+  ;; (ebib-extra-fields
+  ;;  '((BibTeX "annote" "keywords" "doi" "file")
+  ;;    (biblatex "annotation" "keywords" "file")))
+  ;;  (ebib-layout 'custum)
+  (ebib-file-associations '(("pdf" . "open")))
+  (ebib-keywords-use-only-file t)
+  (ebib-keywords-file "~/lib/tex/bib/mykeywords.txt")
+  (ebib-keywords-file-save-on-exit 'always)
+  :config
+  (define-key ebib-multiline-mode-map
+    "\C-c\C-c" 'ebib-quit-multiline-buffer-and-save)
+  (define-key ebib-multiline-mode-map
+    "\C-c\C-q" 'ebib-cancel-multiline-buffer)
+  (define-key ebib-multiline-mode-map
+    "\C-c\C-s" 'ebib-save-from-multiline-buffer)
+  (defun bibtex-autokey-get-year ()
+    "Return year field contents as a string obeying `bibtex-autokey-year-length'."
+    (let ((yearfield (bibtex-autokey-get-field "date")))
+      (substring yearfield 0 bibtex-autokey-year-length)))
+  )
+#+end_src
+
+* ESS
+#+begin_src emacs-lisp
+;;; ESS
+(use-package ess :straight t
+  :defer t
+  :mode (("\\.[rR]$" . R-mode))
+  :commands (R-mode R)
+  :config
+  )
+#+end_src
+
+* Org関係
+** org base
+#+begin_src emacs-lisp
+;;; org-mode
+(use-package org :straight t
+  :defer t
+  :bind (("C-c l" . org-store-link)
+	 ("C-c c" . org-capture)
+	 ("C-c a" . org-agenda)
+	 ("C-c b" . org-switchb))
+  :mode (("\\.org\\'" . org-mode))
+  :init
+  (add-hook 'org-babel-after-execute-hook 'org-display-inline-images)   
+  (add-hook 'org-mode-hook 'org-display-inline-images)
+  :custom
+  (org-directory "~/Documents/org/")
+  (org-agenda-files
+   '("~/Documents/org/inbox.org"
+     "~/Documents/org/ical.org"
+     "~/Documents/org/gtd.org"
+     "~/Documents/org/tickler.org"))
+  (org-capture-templates
+   '(("t" "Todo [inbox]" entry ; 一般的なtodo
+      (file "inbox.org") 
+      "* TODO %^{title} %^g\n  entered on %U\n%?") 
+     ("T" "Tickler [tickler]" entry ; 厄介な問題
+      (file+headline "tickler.org" "Tickler")
+      "* %i%? \n %U")
+     ("m" "Memo [notes]" entry ; 雑記
+      (file "notes.org") 
+      "* %^{topic} %T %^g\n%i%?"
+      :empty-lines 1
+      :jump-to-captured t) 
+     ;; ("j" "Journal" entry ; 日記
+     ;;  (file+datetree+prompt "journal.org")
+     ;;  "* %^{title} %^g\n  entered on %U\n  %?\n  %i\n  %a\n")
+     ("u" "Usage [usage]" entry ; orgの使い方メモ
+      (file+headline "usage.org" "Unfiled")
+      "* %?\n")
+     ("c" "Calendar" entry ; 不要かも
+      (file+headline "ical.org" "Schedule")
+      "** TODO %?\n\t")
+     ))
+  (org-refile-targets
+   '(("~/Documents/org/ical.org" :maxlevel . 1)
+     ("~/Documents/org/gtd.org" :maxlevel . 3)
+     ("~/Documents/org/tickler.org" :maxlevel . 2)))
+  (org-agenda-custom-commands
+   '(("P" "Projects"   
+      ((tags "PROJECT")))
+     ("H" "Office and Home Lists"
+      ((agenda)
+       (tags-todo "OFFICE")
+       (tags-todo "HOME")
+       (tags-todo "COMPUTER")
+       (tags-todo "VIDEO")
+       (tags-todo "READING")))
+     ("D" "Daily Action List"
+      (
+       (agenda "" ((org-agenda-ndays 1)
+		   (org-agenda-sorting-strategy
+		    (quote ((agenda time-up priority-down tag-up) )))
+		   (org-deadline-warning-days 0)
+		   ))))
+     ))
+  (org-use-speed-commands t)
+  (org-confirm-babel-evaluate nil) ;; 評価の確認
+  :config
+  ;; (setq org-src-preserve-indentation nil
+  ;;	org-edit-src-content-indentation 2)
+  (add-to-list 'org-structure-template-alist
+	       '("r" . "src R"))
+  (add-to-list 'org-structure-template-alist
+	       '("m" . "src latex"))
+  (use-package org-habit :straight nil)
+  (use-package org-tempo :straight nil)
+  (use-package org-download :straight t)
+  ;; journal
+  (use-package org-journal
+    :straight (org-journal :type git :host github
+			   :repo "bastibe/org-journal")
+    ;; :defer t
+    :custom
+    (org-journal-dir "~/Documents/org/journal/")
+    (org-journal-file-type 'yearly)
+    ;; (org-journal-date-format "%A, %d %B %Y")
+    :config
+    ;; When =org-journal-file-pattern= has the default value, this would
+    ;; be the regex.
+    ;; (setq org-agenda-file-regexp
+    ;; 	"\\`\\\([^.].*\\.org\\\|[0-9]\\\{8\\\}\\\(\\.gpg\\\)?\\\)\\'")
+    ;; (add-to-list 'org-agenda-files org-journal-dir)
+    (setq org-journal-enable-agenda-integration t
+	  org-icalendar-store-UID t
+	  org-icalendar-include-todo "all"
+	  org-icalendar-combined-agenda-file "~/Documents/org/test.ics")
+    )
+  ;;
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((R . t)
+     (org . t)
+     ;;     (ditaa . t)
+     (latex . t)
+     ;;     (dot . t)
+     (emacs-lisp . t)
+     ;;     (gnuplot . t)
+     ;;     (screen . nil)
+     (shell . t)
+     ;;     (sql . nil)
+     ;;     (sqlite . t)
+     ))
+  )
+#+end_src
+
+** org export
+#+begin_src emacs-lisp
+;;; org-export (ox)
+(use-package ox-hugo :straight t 
+  :after (org ox))
+(use-package ox-latex :straight nil
+  :after (org ox)
+  :config
+  (add-to-list 'org-latex-classes
+	       '("scrartcl"
+		 "\\documentclass{scrartcl}\n[NO-DEFAULT-PACKAGES]"
+		 ("\\section{%s}" . "\\section*{%s}")
+		 ("\\subsection{%s}" . "\\subsection*{%s}")
+		 ("\\subsubsection{%s}" . "\\subsubsection*{%s}")
+		 ("\\paragraph{%s}" . "\\paragraph*{%s}")
+		 ("\\subparagraph{%s}" . "\\subparagraph*{%s}")))
+  (add-to-list 'org-latex-classes
+	       '("scrbook"
+		 "\\documentclass{scrbook}\n[NO-DEFAULT-PACKAGES]"
+		 ("\\part{%s}" . "\\part*{%s}")
+		 ("\\chapter{%s}" . "\\chapter*{%s}")
+		 ("\\section{%s}" . "\\section*{%s}")
+		 ("\\subsection{%s}" . "\\subsection*{%s}")
+		 ("\\subsubsection{%s}" . "\\subsubsection*{%s}")))
+  )
+;;; emacs-reveal
+(use-package org-re-reveal
+  :after org
+  :straight (org-re-reveal :type git :host gitlab
+			   :repo "oer/org-re-reveal"))
+(use-package oer-reveal
+  :after (org org-re-reveal)
+  :straight (oer-reveal :type git :host gitlab
+			:repo "oer/oer-reveal")
+  :config
+  (use-package oer-reveal-publish :straight nil))
+(use-package org-ref :straight t
+  :after org)
+(use-package org-re-reveal-ref
+  :straight (org-re-reveal-ref :type git :host gitlab
+			       :repo "oer/org-re-reveal-ref")
+  :after (org org-ref))
+#+end_src
+
+* hydra関係
+** hydra
+#+begin_src emacs-lisp
+;;; hydra
+(use-package hydra :straight t)
+#+end_src
+
+** org agenda
+#+begin_src emacs-lisp
+;; Hydra for org agenda (graciously taken from Spacemacs)
+(defhydra hydra-org-agenda (:pre (setq which-key-inhibit t)
+                                 :post (setq which-key-inhibit nil)
+                                 :hint none)
+  "
+Org agenda (_q_uit)
+
+^Clock^      ^Visit entry^              ^Date^             ^Other^
+^-----^----  ^-----------^------------  ^----^-----------  ^-----^---------
+_ci_ in      _SPC_ in other window      _ds_ schedule      _gr_ reload
+_co_ out     _TAB_ & go to location     _dd_ set deadline  _._  go to today
+_cq_ cancel  _RET_ & del other windows  _dt_ timestamp     _gd_ go to date
+_cj_ jump    _o_   link                 _+_  do later      ^^
+^^           ^^                         _-_  do earlier    ^^
+^^           ^^                         ^^                 ^^
+^View^          ^Filter^                 ^Headline^         ^Toggle mode^
+^----^--------  ^------^---------------  ^--------^-------  ^-----------^----
+_vd_ day        _ft_ by tag              _ht_ set status    _tf_ follow
+_vw_ week       _fr_ refine by tag       _hk_ kill          _tl_ log
+_vt_ fortnight  _fc_ by category         _hr_ refile        _ta_ archive trees
+_vm_ month      _fh_ by top headline     _hA_ archive       _tA_ archive files
+_vy_ year       _fx_ by regexp           _h:_ set tags      _tr_ clock report
+_vn_ next span  _fd_ delete all filters  _hp_ set priority  _td_ diaries
+_vp_ prev span  ^^                       ^^                 ^^
+_vr_ reset      ^^                       ^^                 ^^
+^^              ^^                       ^^                 ^^
+"
+  ;; Entry
+  ("hA" org-agenda-archive-default)
+  ("hk" org-agenda-kill)
+  ("hp" org-agenda-priority)
+  ("hr" org-agenda-refile)
+  ("h:" org-agenda-set-tags)
+  ("ht" org-agenda-todo)
+  ;; Visit entry
+  ("o"   link-hint-open-link :exit t)
+  ("<tab>" org-agenda-goto :exit t)
+  ("TAB" org-agenda-goto :exit t)
+  ("SPC" org-agenda-show-and-scroll-up)
+  ("RET" org-agenda-switch-to :exit t)
+  ;; Date
+  ("dt" org-agenda-date-prompt)
+  ("dd" org-agenda-deadline)
+  ("+" org-agenda-do-date-later)
+  ("-" org-agenda-do-date-earlier)
+  ("ds" org-agenda-schedule)
+  ;; View
+  ("vd" org-agenda-day-view)
+  ("vw" org-agenda-week-view)
+  ("vt" org-agenda-fortnight-view)
+  ("vm" org-agenda-month-view)
+  ("vy" org-agenda-year-view)
+  ("vn" org-agenda-later)
+  ("vp" org-agenda-earlier)
+  ("vr" org-agenda-reset-view)
+  ;; Toggle mode
+  ("ta" org-agenda-archives-mode)
+  ("tA" (org-agenda-archives-mode 'files))
+  ("tr" org-agenda-clockreport-mode)
+  ("tf" org-agenda-follow-mode)
+  ("tl" org-agenda-log-mode)
+  ("td" org-agenda-toggle-diary)
+  ;; Filter
+  ("fc" org-agenda-filter-by-category)
+  ("fx" org-agenda-filter-by-regexp)
+  ("ft" org-agenda-filter-by-tag)
+  ("fr" org-agenda-filter-by-tag-refine)
+  ("fh" org-agenda-filter-by-top-headline)
+  ("fd" org-agenda-filter-remove-all)
+  ;; Clock
+  ("cq" org-agenda-clock-cancel)
+  ("cj" org-agenda-clock-goto :exit t)
+  ("ci" org-agenda-clock-in :exit t)
+  ("co" org-agenda-clock-out)
+  ;; Other
+  ("q" nil :exit t)
+  ("gd" org-agenda-goto-date)
+  ("." org-agenda-goto-today)
+  ("gr" org-agenda-redo))
+
+#+end_src
+** org clock
+#+begin_src emacs-lisp
+;; org-clock
+(bind-key "C-c w" 'hydra-org-clock/body)
+(defhydra hydra-org-clock (:color blue :hint nil)
+   "
+^Clock:^ ^In/out^     ^Edit^   ^Summary^    | ^Timers:^ ^Run^           ^Insert
+-^-^-----^-^----------^-^------^-^----------|--^-^------^-^-------------^------
+(_?_)    _i_n         _e_dit   _g_oto entry | (_z_)     _r_elative      ti_m_e
+ ^ ^     _c_ontinue   _q_uit   _d_isplay    |  ^ ^      cou_n_tdown     i_t_em
+ ^ ^     _o_ut        ^ ^      _r_eport     |  ^ ^      _p_ause toggle
+ ^ ^     ^ ^          ^ ^      ^ ^          |  ^ ^      _s_top
+"
+   ("i" org-clock-in)
+   ("c" org-clock-in-last)
+   ("o" org-clock-out)
+   
+   ("e" org-clock-modify-effort-estimate)
+   ("q" org-clock-cancel)
+
+   ("g" org-clock-goto)
+   ("d" org-clock-display)
+   ("r" org-clock-report)
+   ("?" (org-info "Clocking commands"))
+
+  ("r" org-timer-start)
+  ("n" org-timer-set-timer)
+  ("p" org-timer-pause-or-continue)
+  ("s" org-timer-stop)
+
+  ("m" org-timer)
+  ("t" org-timer-item)
+  ("z" (org-info "Timers")))
+#+end_src
+
+** pdf-tools
+#+begin_src emacs-lisp
+;; pdf-tools
+(use-package pdf-tools :straight t
+  :config
+  (pdf-tools-install)
+  (setq-default pdf-view-display-size 'fit-page)
+  (bind-keys :map pdf-view-mode-map
+	     ("\\" . hydra-pdftools/body)
+	     ("<s-spc>" .  pdf-view-scroll-down-or-next-page)
+	     ("g"  . pdf-view-first-page)
+	     ("G"  . pdf-view-last-page)
+	     ("l"  . image-forward-hscroll)
+	     ("h"  . image-backward-hscroll)
+	     ("j"  . pdf-view-next-page)
+	     ("k"  . pdf-view-previous-page)
+	     ("e"  . pdf-view-goto-page)
+	     ("u"  . pdf-view-revert-buffer)
+	     ("al" . pdf-annot-list-annotations)
+	     ("ad" . pdf-annot-delete)
+	     ("aa" . pdf-annot-attachment-dired)
+	     ("am" . pdf-annot-add-markup-annotation)
+	     ("at" . pdf-annot-add-text-annotation)
+	     ("y"  . pdf-view-kill-ring-save)
+	     ("i"  . pdf-misc-display-metadata)
+	     ("s"  . pdf-occur)
+	     ("b"  . pdf-view-set-slice-from-bounding-box)
+	     ("r"  . pdf-view-reset-slice))
+  (use-package org-pdfview :straight t))
+(defhydra hydra-pdftools (:color blue :hint nil)
+  "
+                                                                      ╭-----------┐
+       Move  History   Scale/Fit     Annotations  Search/Link    Do   │ PDF Tools │
+   --------------------------------------------------------------------------------
+         ^^_g_^^      _B_    ^↧^    _+_    ^ ^     [_al_] list    [_s_] search    [_u_] revert buffer
+         ^^^↑^^^      ^↑^    _H_    ^↑^  ↦ _W_ ↤   [_am_] markup  [_o_] outline   [_i_] info
+         ^^_p_^^      ^ ^    ^↥^    _0_    ^ ^     [_at_] text    [_F_] link      [_d_] dark mode
+         ^^^↑^^^      ^↓^  ╭─^─^─┐  ^↓^  ╭─^ ^─┐   [_ad_] delete  [_f_] search link
+    _h_ ←pag_e_→ _l_  _N_  │ _P_ │  _-_    _b_     [_aa_] dired
+         ^^^↓^^^      ^ ^  ╰─^─^─╯  ^ ^  ╰─^ ^─╯   [_y_]  yank
+         ^^_n_^^      ^ ^  _r_eset slice box
+         ^^^↓^^^
+         ^^_G_^^
+   --------------------------------------------------------------------------------
+        "
+        ("\\" hydra-master/body "back")
+        ("<ESC>" nil "quit")
+        ("al" pdf-annot-list-annotations)
+        ("ad" pdf-annot-delete)
+        ("aa" pdf-annot-attachment-dired)
+        ("am" pdf-annot-add-markup-annotation)
+        ("at" pdf-annot-add-text-annotation)
+        ("y"  pdf-view-kill-ring-save)
+        ("+" pdf-view-enlarge :color red)
+        ("-" pdf-view-shrink :color red)
+        ("0" pdf-view-scale-reset)
+        ("H" pdf-view-fit-height-to-window)
+        ("W" pdf-view-fit-width-to-window)
+        ("P" pdf-view-fit-page-to-window)
+        ("n" pdf-view-next-page-command :color red)
+        ("p" pdf-view-previous-page-command :color red)
+        ("d" pdf-view-dark-minor-mode)
+        ("b" pdf-view-set-slice-from-bounding-box)
+        ("r" pdf-view-reset-slice)
+        ("g" pdf-view-first-page)
+        ("G" pdf-view-last-page)
+        ("e" pdf-view-goto-page)
+        ("o" pdf-outline)
+        ("s" pdf-occur)
+        ("i" pdf-misc-display-metadata)
+        ("u" pdf-view-revert-buffer)
+        ("F" pdf-links-action-perfom)
+        ("f" pdf-links-isearch-link)
+        ("B" pdf-history-backward :color red)
+        ("N" pdf-history-forward :color red)
+        ("l" image-forward-hscroll :color red)
+        ("h" image-backward-hscroll :color red))
+#+end_src
+
+* custom.el
+  - https://github.com/whatyouhide/emacs.d/blob/master/init.el
+#+begin_src emacs-lisp
+;;; Custom file handling
+(setq custom-file "~/.emacs.d/custom.el")
+(when (not (file-exists-p custom-file))
+  (with-temp-buffer (write-file custom-file)))
+(load custom-file)
+#+end_src
+
+* COMMENT Local file settings for Emacs
+
+# Local Variables:
+# time-stamp-line-limit: 1000
+# time-stamp-format: "%04y.%02m.%02d %02H:%02M:%02S"
+# time-stamp-active: t
+# time-stamp-start: "#\\+DATE:[ \t]*"
+# time-stamp-end: "$"
+# org-src-preserve-indentation: t
+# org-edit-src-content-indentation: 0
+# End:
+
