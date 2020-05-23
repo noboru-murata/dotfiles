@@ -1,7 +1,7 @@
 #+TITLE: init file for emacs
 #+AUTHOR: Noboru Murata
 #+EMAIL: noboru.murata@gmail.com
-#+DATE: 2020.05.05 15:33:36
+#+DATE: 2020.05.23 14:30:26
 #+STARTUP: hidestars content
 #+OPTIONS: date:t H:4 num:nil toc:nil \n:nil
 #+OPTIONS: @:t ::t |:t ^:t -:t f:t *:t TeX:t LaTeX:t 
@@ -48,6 +48,7 @@
 ;; fallback to use-package 
 (straight-use-package 'use-package)
 (setq straight-use-package-by-default t)
+(setq straight-recipes-gnu-elpa-use-mirror t)
 
 ;; el-patch
 (straight-use-package 'el-patch)
@@ -190,7 +191,7 @@
 	      "/usr/sbin"
 	      "/bin"
 	      "/usr/bin"
-	      "/opt/local/bin"
+	      "/opt/X11/bin"
 	      "/usr/local/bin"
 	      "/Library/TeX/texbin"
 	      (expand-file-name "~/bin")
@@ -473,8 +474,10 @@ translation it is possible to get suggestion."
 ** auctex
 #+begin_src emacs-lisp
 ;;; auctex
-(use-package auctex
-  :straight (auctex :local-repo "auctex")
+; (use-package auctex
+;   :straight (auctex :local-repo "auctex")
+(use-package tex
+  :straight auctex
   :defer t
   :init
   ;; @see http://miyazakikenji.wordpress.com/2013/06/21/gnupack-の-emacs-に-auctex/
@@ -522,7 +525,8 @@ translation it is possible to get suggestion."
   (setq reftex-default-bibliography '("~/lib/tex/bib/refs.bib"))
   )
 (use-package auctex-latexmk
-  :straight (auctex-latexmk :local-repo "auctex-latexmk")
+  :straight t
+;;  :straight (auctex-latexmk :local-repo "auctex-latexmk")
   :after (auctex))
 #+end_src
 
@@ -732,7 +736,13 @@ translation it is possible to get suggestion."
      ))
   )
 #+end_src
+** poly-org-mode
+#+begin_src emacs-lisp
+;;; poly-org
+(use-package poly-org :straight t 
+  :after (org))
 
+#+end_src
 ** org export
 #+begin_src emacs-lisp
 ;;; org-export (ox)
@@ -741,9 +751,11 @@ translation it is possible to get suggestion."
 (use-package ox-latex :straight nil
   :after (org ox)
   :config
+  (setq org-latex-pdf-process '("latexmk %f"))
   (add-to-list 'org-latex-classes
 	       '("scrartcl"
-		 "\\documentclass{scrartcl}\n[NO-DEFAULT-PACKAGES]"
+		 "\\documentclass{scrartcl}
+                  [NO-DEFAULT-PACKAGES]"
 		 ("\\section{%s}" . "\\section*{%s}")
 		 ("\\subsection{%s}" . "\\subsection*{%s}")
 		 ("\\subsubsection{%s}" . "\\subsubsection*{%s}")
@@ -751,7 +763,8 @@ translation it is possible to get suggestion."
 		 ("\\subparagraph{%s}" . "\\subparagraph*{%s}")))
   (add-to-list 'org-latex-classes
 	       '("scrbook"
-		 "\\documentclass{scrbook}\n[NO-DEFAULT-PACKAGES]"
+		 "\\documentclass{scrbook}
+                  [NO-DEFAULT-PACKAGES]"
 		 ("\\part{%s}" . "\\part*{%s}")
 		 ("\\chapter{%s}" . "\\chapter*{%s}")
 		 ("\\section{%s}" . "\\section*{%s}")
