@@ -1,7 +1,7 @@
 #+TITLE: init file for emacs
 #+AUTHOR: Noboru Murata
 #+EMAIL: noboru.murata@gmail.com
-#+DATE: 2020.05.23 14:30:26
+#+DATE: Time-stamp: <2020-08-19 11:25:32 mura>
 #+STARTUP: hidestars content
 #+OPTIONS: date:t H:4 num:nil toc:nil \n:nil
 #+OPTIONS: @:t ::t |:t ^:t -:t f:t *:t TeX:t LaTeX:t 
@@ -62,17 +62,6 @@
 (unless (boundp 'user-emacs-directory)
   (defvar user-emacs-directory (expand-file-name "~/.emacs.d/")))
 
-;; local function for load-path
-(defun add-to-load-path (&rest paths)
-  (let (path)
-    (dolist (path paths paths)
-      (let ((default-directory
-              (expand-file-name (concat user-emacs-directory path))))
-        (add-to-list 'load-path default-directory)
-        (if (fboundp 'normal-top-level-add-subdirs-to-load-path)
-            (normal-top-level-add-subdirs-to-load-path))))))
-(add-to-load-path "local") ; for local lisp files 
-
 ;; functions for get environments
 (defun x->bool (elt) (not (not elt)))
 (defvar emacs22-p (equal emacs-major-version 22))
@@ -97,6 +86,19 @@
 (defvar meadow-p (featurep 'meadow))
 (defvar windows-p (or cygwin-p nt-p meadow-p))
 #+end_src
+
+** 自前のelisp用
+今は使っていない
+;; local function for load-path
+(defun add-to-load-path (&rest paths)
+  (let (path)
+    (dolist (path paths paths)
+      (let ((default-directory
+              (expand-file-name (concat user-emacs-directory path))))
+        (add-to-list 'load-path default-directory)
+        (if (fboundp 'normal-top-level-add-subdirs-to-load-path)
+            (normal-top-level-add-subdirs-to-load-path))))))
+(add-to-load-path "local") ; for local lisp files 
 
 ** 文字コードの設定
 #+begin_src emacs-lisp
@@ -169,21 +171,22 @@
 ;;       '(lambda () (auto-fill-mode 1)))
 ;; (remove-hook 'text-mode-hook #'turn-on-auto-fill)
 
-;; function for full screen 
-(defun toggle-fullscreen ()
-  "Toggle full screen"
-  (interactive)
-  (set-frame-parameter
-   nil 'fullscreen
-   (when (not (frame-parameter nil 'fullscreen)) 'fullboth)))
-(tool-bar-mode 0)
-(scroll-bar-mode 0)
-(toggle-fullscreen)
-
-;; set up for frame spliting
-(setq split-height-threshold 80)
-(setq split-width-threshold 80)
-(setq ns-pop-up-frames nil) ; disable frame pop-up
+;; function for full screen
+(when (display-graphic-p)
+  (defun toggle-fullscreen ()
+    "Toggle full screen"
+    (interactive)
+    (set-frame-parameter
+     nil 'fullscreen
+     (when (not (frame-parameter nil 'fullscreen)) 'fullboth)))
+  (tool-bar-mode 0)
+  (scroll-bar-mode 0)
+  (toggle-fullscreen)
+  ;; set up for frame spliting
+  (setq ns-pop-up-frames nil) ; disable frame pop-up
+  (setq split-height-threshold 80)
+  (setq split-width-threshold 140)
+  )
 
 ;; set up for path and environment variables
 (dolist (dir (list
@@ -251,35 +254,72 @@
 (setq dired-isearch-filenames t)
 #+end_src
 
+最大化するだけなら以下の方法も可
+;; @https://www.emacswiki.org/emacs/FullScreen
+;; (custom-set-variables
+;;  '(initial-frame-alist (quote ((fullscreen . maximized)))))
+
+(when (display-graphic-p)
+  (tool-bar-mode 0)
+  (scroll-bar-mode 0)
+  (custom-set-variables
+   '(initial-frame-alist (quote ((fullscreen . maximized)))))
+  ;; set up for frame spliting
+  (setq ns-pop-up-frames nil) ; disable frame pop-up
+  (setq split-height-threshold 80)
+  (setq split-width-threshold 140)
+  )
+以下要検討
+;; (when (>= (frame-width) 140)
+;;   ;; set up for frame spliting
+;;   (setq split-height-threshold 80)
+;;   (setq split-width-threshold 80)
+;;  ) 
+;; (unless (>= (frame-width) 140)
+;;   ;; set up for frame spliting
+;;   (setq split-height-threshold nil)
+;;   (setq split-width-threshold nil)
+;;  ) 
+
 * 表示関係
 ** fonts
 #+begin_src emacs-lisp
 ;;; fonts
-(let* ((font-family "Source Han Code JP") ;; "Menlo"
-       (font-size 20)
-       (font-height (* font-size 10))
-       (jp-font-family "Source Han Code JP")) ;; "ヒラギノ角ゴ ProN"
-  (set-face-attribute 'default nil :family font-family :height font-height)
-  (let ((name (frame-parameter nil 'font))
-	(jp-font-spec (font-spec :family jp-font-family))
-	(jp-characters '(katakana-jisx0201
-			 cp932-2-byte
-			 japanese-jisx0212
-			 japanese-jisx0213-2
-			 japanese-jisx0213.2004-1))
-	(font-spec (font-spec :family font-family))
-	(characters '((?\u00A0 . ?\u00FF)    ; Latin-1
-		      (?\u0100 . ?\u017F)    ; Latin Extended-A
-		      (?\u0180 . ?\u024F)    ; Latin Extended-B
-		      (?\u0250 . ?\u02AF)    ; IPA Extensions
-		      (?\u0370 . ?\u03FF)))) ; Greek and Coptic
-    (dolist (jp-character jp-characters)
-      (set-fontset-font name jp-character jp-font-spec))
-    (dolist (character characters)
-      (set-fontset-font name character font-spec))
-    ;; (add-to-list 'face-font-rescale-alist (cons jp-font-family 1.2)) ;; for Hiragino
-    ))
+(when (member "Source Han Code JP" (font-family-list))
+  (set-face-attribute 'default nil :family "Source Han Code JP" :height 180))
 #+end_src
+フォントの確認
+(dolist (x (font-family-list)) (print x)) ; Enter C-j
+(member "Source Han Code JP" (font-family-list))
+一番簡単な方法 サイズはどうする
+(set-default-font "Source Han Code JP N")  
+もとの設定
+(when (display-graphic-p)  
+  (let* ((font-family "Source Han Code JP") ;; "Menlo"
+	 (font-size 20)
+	 (font-height (* font-size 10))
+	 (jp-font-family "Source Han Code JP")) ;; "ヒラギノ角ゴ ProN"
+    (set-face-attribute 'default nil :family font-family :height font-height)
+    (let ((name (frame-parameter nil 'font))
+	  (jp-font-spec (font-spec :family jp-font-family))
+	  (jp-characters '(katakana-jisx0201
+			   cp932-2-byte
+			   japanese-jisx0212
+			   japanese-jisx0213-2
+			   japanese-jisx0213.2004-1))
+	  (font-spec (font-spec :family font-family))
+	  (characters '((?\u00A0 . ?\u00FF)    ; Latin-1
+			(?\u0100 . ?\u017F)    ; Latin Extended-A
+			(?\u0180 . ?\u024F)    ; Latin Extended-B
+			(?\u0250 . ?\u02AF)    ; IPA Extensions
+			(?\u0370 . ?\u03FF)))) ; Greek and Coptic
+      (dolist (jp-character jp-characters)
+	(set-fontset-font name jp-character jp-font-spec))
+      (dolist (character characters)
+	(set-fontset-font name character font-spec))
+      ;; (add-to-list 'face-font-rescale-alist (cons jp-font-family 1.2)) ;; for Hiragino
+      ))
+  )
 
 ** theme
    - https://github.com/whatyouhide/emacs.d/blob/master/init.el
@@ -468,7 +508,6 @@ translation it is possible to get suggestion."
 (push '("*Google Translate*") popwin:special-display-config)
 (push '("*latex-math-preview-expression*") popwin:special-display-config)
 #+end_src
-
 
 * TeX関係
 ** auctex
@@ -752,6 +791,7 @@ translation it is possible to get suggestion."
   :after (org ox)
   :config
   (setq org-latex-pdf-process '("latexmk %f"))
+  (setq org-latex-listings 'minted)
   (add-to-list 'org-latex-classes
 	       '("scrartcl"
 		 "\\documentclass{scrartcl}
@@ -788,6 +828,19 @@ translation it is possible to get suggestion."
   :straight (org-re-reveal-ref :type git :host gitlab
 			       :repo "oer/org-re-reveal-ref")
   :after (org org-ref))
+(use-package ox-pandoc :straight t
+  :after (org ox)
+  :config
+  ;; default options for all output formats
+  (setq org-pandoc-options '((standalone . t)))
+  ;; cancel above settings only for 'docx' format
+  (setq org-pandoc-options-for-docx '((standalone . nil)))
+  ;; special settings for beamer-pdf and latex-pdf exporters
+  (setq org-pandoc-options-for-beamer-pdf '((pdf-engine . "latexmk")))
+  (setq org-pandoc-options-for-latex-pdf '((pdf-engine . "latexmk")))
+  ;; special extensions for markdown_github output
+  (setq org-pandoc-format-extensions '(markdown_github+pipe_tables+raw_html))
+  )
 #+end_src
 
 * hydra関係
@@ -1005,7 +1058,6 @@ _vr_ reset      ^^                       ^^                 ^^
 #+end_src
 
 * COMMENT Local file settings for Emacs
-# Local Variables:
 # time-stamp-line-limit: 1000
 # time-stamp-format: "%04y.%02m.%02d %02H:%02M:%02S"
 # time-stamp-active: t
@@ -1013,5 +1065,7 @@ _vr_ reset      ^^                       ^^                 ^^
 # time-stamp-end: "$"
 # org-src-preserve-indentation: t
 # org-edit-src-content-indentation: 0
+
+# Local Variables:
 # End:
 
