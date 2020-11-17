@@ -1,7 +1,7 @@
 #+TITLE: init file for emacs
 #+AUTHOR: Noboru Murata
 #+EMAIL: noboru.murata@gmail.com
-#+DATE: Time-stamp: <2020-08-19 11:25:32 mura>
+#+DATE: Time-stamp: <2020-11-17 18:56:49 mura>
 #+STARTUP: hidestars content
 #+OPTIONS: date:t H:4 num:nil toc:nil \n:nil
 #+OPTIONS: @:t ::t |:t ^:t -:t f:t *:t TeX:t LaTeX:t 
@@ -524,6 +524,12 @@ translation it is possible to get suggestion."
   (add-hook 'LaTeX-mode-hook 'auctex-latexmk-setup)
   (add-hook 'LaTeX-mode-hook 'LaTeX-math-mode)
   (add-hook 'LaTeX-mode-hook 'outline-minor-mode)
+  (add-hook 'plain-TeX-mode-hook
+	    (lambda () (set (make-local-variable 'TeX-electric-math)
+			    (cons "$" "$"))))
+  (add-hook 'LaTeX-mode-hook
+	    (lambda () (set (make-local-variable 'TeX-electric-math)
+			    (cons "\\(" "\\)"))))
   ;; @see http://stackoverflow.com/questions/14629198/redefine-auctex-font-and-compile-keybindings
   (defun my-LaTeX-hook ()
     (local-set-key "\C-c\C-t" 'TeX-command-master)
@@ -533,14 +539,16 @@ translation it is possible to get suggestion."
   (add-hook 'LaTeX-mode-hook 'my-LaTeX-hook)
   ;; for skk
   (defun my-TeX-insert-dollar ()
-    (interactive) (TeX-insert-dollar 2) (backward-char 1))
+    (interactive) (insert "\\(\\)") (backward-char 2))
+    ;; (interactive) (TeX-insert-dollar 2) (backward-char 1))
   (add-hook 'skk-mode-hook
             (lambda ()
-              (if (eq major-mode 'latex-mode)
+              (if (or (eq major-mode 'latex-mode) (eq major-mode 'org-mode))
                   (progn
                     (define-key skk-j-mode-map "\\" 'self-insert-command)
                     (define-key skk-j-mode-map "$" 'my-TeX-insert-dollar)
-                    (define-key skk-latin-mode-map "$" 'my-TeX-insert-dollar)))
+                    (define-key skk-latin-mode-map "$" 'my-TeX-insert-dollar)
+		    ))
               ))
   ;; reftex
   (add-hook 'LaTeX-mode-hook 'turn-on-reftex)
@@ -745,7 +753,7 @@ translation it is possible to get suggestion."
     ;; :defer t
     :custom
     (org-journal-dir "~/Documents/org/journal/")
-    (org-journal-file-type 'yearly)
+    ;; (org-journal-file-type 'yearly)
     ;; (org-journal-date-format "%A, %d %B %Y")
     :config
     ;; When =org-journal-file-pattern= has the default value, this would
@@ -756,7 +764,7 @@ translation it is possible to get suggestion."
     (setq org-journal-enable-agenda-integration t
 	  org-icalendar-store-UID t
 	  org-icalendar-include-todo "all"
-	  org-icalendar-combined-agenda-file "~/Documents/org/test.ics")
+	  org-icalendar-combined-agenda-file "~/Documents/org/ical.ics")
     )
   ;;
   (org-babel-do-load-languages
@@ -791,7 +799,7 @@ translation it is possible to get suggestion."
   :after (org ox)
   :config
   (setq org-latex-pdf-process '("latexmk %f"))
-  (setq org-latex-listings 'minted)
+;; (setq org-latex-listings 'minted)
   (add-to-list 'org-latex-classes
 	       '("scrartcl"
 		 "\\documentclass{scrartcl}
