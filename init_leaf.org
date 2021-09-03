@@ -1,0 +1,2114 @@
+#+TITLE: init file for emacs
+#+AUTHOR: Noboru Murata
+#+EMAIL: noboru.murata@gmail.com
+#+DATE: Time-stamp: <2021-09-03 11:24:39 mura>
+#+STARTUP: hidestars content
+#+OPTIONS: date:t H:4 num:nil toc:nil \n:nil
+#+OPTIONS: @:t ::t |:t ^:t -:t f:t *:t TeX:t LaTeX:t 
+#+OPTIONS: skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+PROPERTY: header-args :tangle "~/etc/emacs.d/init.el"
+
+* 基本方針
+- 書き直したら C-c C-v C-t (tangle)
+- package は全て [[https://github.com/raxod502/straight.el][straight.el]] の管理下に
+- use-package に fallback しているが，とりあえず明示
+- use-package から leaf に移行
+  - TODO で管理
+  - bind の書き方 (localは :xxx-map で指定)
+  - custom の記法 ( . )
+  - hook の記法 (-hook が必要)
+  - defer は不要
+  - keywordの順は (leaf-available-keywords) の出力に準ず．
+    #+begin_quote
+    :disabled
+    :load-path
+    :doc
+    :file
+    :url
+    :preface
+    :when
+    :unless
+    :if
+    :straight
+    :after
+    :commands
+    :bind
+    :mode
+    :hook
+    :hydra
+    :init
+    :require
+    :custom
+    :config
+    :blackout
+    #+end_quote
+- 記述がばらばらなので随時整理
+- org-mode の設定は進行中
+- +auctex は straight の挙動が不安定?なので手動+
+- dired-x はよくわからない
+
+
+* ファイルヘッダ
+init.el を直接編集することはないが，とりあえず mode などを設定しておく．
+
+#+begin_src emacs-lisp
+;;; -*- mode: emacs-lisp; coding: utf-8-emacs-unix; indent-tabs-mode: nil -*-
+
+;; Copyright (C) 2002-2021, mura
+;; Author: noboru.murata@gmail.com
+;; Maintainer: noboru.murata@gmail.com
+;; Keywords: emacs initialization
+#+end_src
+
+
+* 基本設定
+** DONE パッケージ管理
+package の依存関係は [[https://github.com/raxod502/straight.el][straight.el]] に任せ，
+[[https://github.com/jwiegley/use-package][use-package.el]] を利用して整理する．
+随時 [[https://github.com/conao3/leaf.el][leaf.el]] に移行していく
+
+#+begin_src emacs-lisp
+;;; set up straight.el + use-package.el + leaf.el
+;; bootstrap for straight.el  
+(defvar bootstrap-version)
+(let ((bootstrap-file
+       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
+      (bootstrap-version 5))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/raxod502/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
+;; el-patch/blackout
+(straight-use-package 'el-patch)
+(straight-use-package 'blackout)
+;; fallback to use-package 
+(straight-use-package 'use-package)
+(setq straight-use-package-by-default t)
+(setq straight-recipes-gnu-elpa-use-mirror t)
+;; leaf/leaf-keywords
+(straight-use-package 'leaf)
+(leaf *leaf-keywords
+  :config
+  (straight-use-package 'leaf-keywords)
+  (leaf-keywords-init))
+;; hydra
+(leaf hydra
+  :straight t)
+#+end_src
+
+** DONE 環境関数
+環境の違いを吸収するための関数群．
+そろそろ古いものは気にしなくてもよいかもしれない．
+[[https://github.com/conao3/leaf.el][leaf.el]] には Emacs の version に関する関数は用意されている．
+
+#+begin_src emacs-lisp
+;;; for various environments
+;; if user-emacs-directory is not defined (before Emacs 22)
+(unless (boundp 'user-emacs-directory)
+  (defvar user-emacs-directory (expand-file-name "~/.emacs.d/")))
+;; functions for get environments
+(defun x->bool (elt) (not (not elt)))
+(defvar emacs22-p (equal emacs-major-version 22))
+(defvar emacs23-p (equal emacs-major-version 23))
+(defvar emacs24-p (equal emacs-major-version 24))
+(defvar emacs25-p (equal emacs-major-version 25))
+(defvar emacs26-p (equal emacs-major-version 26))
+(defvar emacs27-p (equal emacs-major-version 27))
+(defvar darwin-p (eq system-type 'darwin))
+(defvar ns-p (featurep 'ns))
+(defvar carbon-p (and (eq window-system 'mac) emacs22-p))
+(defvar mac-p (and (eq window-system 'mac) (or emacs23-p emacs24-p emacs25-p emacs26-p emacs27-p)))
+(defvar linux-p (eq system-type 'gnu/linux))
+(defvar colinux-p (when linux-p
+                    (let ((file "/proc/modules"))
+                      (and
+                       (file-readable-p file)
+                       (x->bool
+                        (with-temp-buffer
+                          (insert-file-contents file)
+                          (goto-char (point-min))
+                          (re-search-forward "^cofuse\.+" nil t)))))))
+(defvar cygwin-p (eq system-type 'cygwin))
+(defvar nt-p (eq system-type 'windows-nt))
+(defvar meadow-p (featurep 'meadow))
+(defvar windows-p (or cygwin-p nt-p meadow-p))
+#+end_src
+
+環境変数は shell の設定から取ってくるようにする．
+特殊なものは直接設定．
+
+#+begin_src emacs-lisp
+;;; environment variables  
+(leaf exec-path-from-shell
+  :straight t
+  :defun (exec-path-from-shell-initialize)
+  :custom
+  ((exec-path-from-shell-check-startup-files . nil)
+   (exec-path-from-shell-arguments . nil)
+   (exec-path-from-shell-variables
+    . '(
+        "PATH"
+        "SHELL"
+        "MANPATH"
+        "TEXINPUTS"
+        "TEXFONTS"
+        "BIBINPUTS"
+        "SSH_AUTH_SOCK"
+        )))
+  :config
+  (exec-path-from-shell-initialize)
+  )
+(setenv "DISPLAY" "localhost")
+(setenv "LC_ALL" "ja_JP.UTF-8")
+(setq system-time-locale "C")
+#+end_src
+
+** DONE 文字コード
+基本は utf-8 で設定．
+macOS は若干癖がある．
+
+#+begin_src emacs-lisp
+;;; use utf-8 encoding
+(set-language-environment "Japanese")
+(prefer-coding-system 'utf-8)
+(set-default-coding-systems 'utf-8-unix)
+(cond
+ (mac-p ; for HFS+ file format (macOS) 
+  (leaf ucs-normalize :require t)
+  (setq file-name-coding-system 'utf-8-hfs)
+  (setq locale-coding-system 'utf-8-hfs))
+ (windows-p ; for Windos
+  (setq file-name-coding-system 'sjis)
+  (setq locale-coding-system 'utf-8))
+ (t ; otherwise
+  (setq file-name-coding-system 'utf-8)
+  (setq locale-coding-system 'utf-8)))
+#+end_src
+
+** TODO 基本操作
+以下に個別に設定が必要な基本的なものを列挙する．
+もう少し整理が必要．
+
+#+begin_src emacs-lisp
+;;; look & feel
+(leaf *my-basics
+  :config
+  ;; (display-time)
+  (add-hook 'before-save-hook 'time-stamp) ; add time stamps 
+  ;; (global-set-key "\C-c$" 'toggle-truncate-lines)
+  ;; (global-set-key "\C-xw" 'what-line)
+  (line-number-mode t)
+  (column-number-mode t)
+  (setq transient-mark-mode t)
+  ;; set up auto fill mode for text mode
+  ;; (setq text-mode-hook
+  ;;       '(lambda () (auto-fill-mode 1)))
+  ;; (remove-hook 'text-mode-hook #'turn-on-auto-fill)
+  (setq confirm-kill-emacs 'y-or-n-p)
+  )
+;; (leaf sr-speedbar
+;;   :straight t
+;;   :custom
+;;   (sr-speedbar-right-side nil))
+(leaf ace-window
+  :straight t
+  :bind ("M-o" . ace-window))
+(leaf transpose-frame
+  :straight t
+  :require t)
+(leaf *my-windows
+  :config
+  (setq split-height-threshold nil)
+  (setq split-width-threshold 120)
+  )
+(leaf beacon
+  :straight t
+  ;; :config
+  ;;  (beacon-color . "violet")
+  :hook (after-init-hook . beacon-mode))
+#+end_src
+
+** TODO キーバインド
+
+C-h の設定は悩みどころ．
+
+#+begin_src emacs-lisp 
+;;; keybinds
+(leaf *my-keybind
+  :after hydra
+  :config
+  ;; (keyboard-translate ?\C-h ?\C-?)
+  ;; (keyboard-translate ?\C-? ?\C-h) 
+  (global-set-key (kbd "C-h") 'delete-backward-char)
+  (global-set-key (kbd "C-?") 'help-command) 
+  ;; (global-set-key (kbd "C-S-h") #'hydra-navi/body)
+  (leaf *my-mac-keybind
+    :if (eq system-type 'darwin)
+    :config
+    (setq ns-command-modifier 'meta     ; Cmd と Option を逆にする
+          ns-alternate-modifier 'super))
+  )
+#+end_src
+
+** DONE ファイルマネージャ
+
+シンプルに dired を利用．
+[[https://github.com/abo-abo/hydra/wiki/][hydra wiki]] の dired を利用して，
+[[https://github.com/abo-abo/hydra][hydra]] で keybind を呼び出せるように設定．
+
+#+begin_src emacs-lisp
+;;; file manager
+;; dired
+(leaf dired
+  :straight nil
+  :custom
+  (dired-dwim-target . t)
+  (dired-recursive-copies . 'always)
+  (dired-isearch-filenames . t)
+  :config
+  (put 'dired-find-alternate-file 'disabled nil))
+;; dired-x
+(leaf dired-x
+  :straight nil
+  :after dired
+  :hydra
+  (hydra-dired
+   (:hint nil)
+   "
+^Navigate^          ^Edit^            ^Mark^               ^Command^           ^Misc^
+^^^^^^^^^^-----------------------------------------------------------------------------------------
+_n_: next           _+_: mkdir        _m_: mark            _Z_: compress file  _(_: details
+_p_: previous       _C_: copy         _u_: unmark          ^ ^                 _)_: hide some files
+_J_: up directory   _R_: rename       _U_: unmark all      ^ ^                 _g_: refresh
+^ ^                 _D_: delete       _t_: toggle marks    _M_: chmod
+_f_: open file      ^ ^               _E_: extension mark  _G_: chgrp          _q_: quit window
+_v_: view file      _Y_: rel symlink  _F_: find marked     _O_: chown
+_a_: open in        _S_: symlink
+^ ^    current buf  ^ ^               ^ ^                  _!_: shell command  _._: toggle Hydra
+"
+   ;; Navigate
+   ("n" dired-next-line)
+   ("p" dired-previous-line)
+   ("g" revert-buffer)
+   ("J" dired-up-directory)
+   ("f" dired-find-file)
+   ("v" dired-view-file)
+   ("a" dired-find-alternate-file)
+   ;; Edit
+   ("+" dired-create-directory)
+   ("C" dired-do-copy)
+   ("R" dired-do-rename)
+   ("D" dired-do-delete)
+   ("Y" dired-do-relsymlink)
+   ("S" dired-do-symlink)
+   ;; Mark
+   ("m" dired-mark)
+   ("u" dired-unmark)
+   ("U" dired-unmark-all-marks)
+   ("t" dired-toggle-marks)
+   ("E" dired-mark-extension)
+   ("F" dired-do-find-marked-files)
+   ("Z" dired-do-compress)
+   ("M" dired-do-chmod)
+   ("G" dired-do-chgrp)
+   ("O" dired-do-chown)
+   ("!" dired-do-shell-command)
+   ;; Misc
+   ("(" dired-hide-details-mode)
+   (")" dired-omit-mode)
+   ("g" revert-buffer)
+   ("q" quit-window)
+   ("." nil))
+  :require t
+  :custom
+  (dired-omit-files . "^\\.?#\\|^\\.$\\|^\\.\\.$\\|^\\..+$")
+  (dired-bind-jump . nil)
+  :config
+  (define-key dired-mode-map "." 'hydra-dired/body))
+;; use all the icons for dired
+(leaf all-the-icons-dired
+  :if (window-system)
+  :straight t
+  :hook (dired-mode-hook . all-the-icons-dired-mode))
+#+end_src
+
+** DONE 補完
+[[https://github.com/minad/vertico][vertico]] + [[https://github.com/minad/consult][consult]] で構築．
+それぞれの基本設定の例を利用．
+[[https://github.com/minad/consult][consult]] の設定はちょっと煩わしい．
+
+#+begin_src emacs-lisp
+;;; completion system
+;; vertico
+(leaf vertico
+  :straight t
+  :custom
+  ;; (vertico-resize . t)
+  (vertico-cycle . t)
+  :init
+  (vertico-mode)
+  )
+;; orderless
+(leaf orderless
+  :straight t
+  :custom
+  (completion-styles . '(orderless))
+  (completion-category-defaults . nil)
+  (completion-category-overrides . '((file (styles partial-completion))))
+  )
+;; save history
+(leaf savehist
+  :straight nil
+  :init
+  (savehist-mode)
+  )
+;; consult
+(leaf consult
+  :straight t
+  :bind (;; C-c bindings (mode-specific-map)
+         ("C-c h" . consult-history)
+         ("C-c m" . consult-mode-command)
+         ("C-c b" . consult-bookmark)
+         ("C-c k" . consult-kmacro)
+         ;; C-x bindings (ctl-x-map)
+         ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
+         ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
+         ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+         ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+         ;; Custom M-# bindings for fast register access
+         ("M-#" . consult-register-load)
+         ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
+         ("C-M-#" . consult-register)
+         ;; Other custom bindings
+         ("M-y" . consult-yank-pop)                ;; orig. yank-pop
+         ("<help> a" . consult-apropos)            ;; orig. apropos-command
+         ;; M-g bindings (goto-map)
+         ("M-g e" . consult-compile-error)
+         ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
+         ("M-g g" . consult-goto-line)             ;; orig. goto-line
+         ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+         ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
+         ("M-g m" . consult-mark)
+         ("M-g k" . consult-global-mark)
+         ("M-g i" . consult-imenu)
+         ("M-g I" . consult-imenu-multi)
+         ;; M-s bindings (search-map)
+         ("M-s f" . consult-find)
+         ("M-s F" . consult-locate)
+         ("M-s g" . consult-grep)
+         ("M-s G" . consult-git-grep)
+         ("M-s r" . consult-ripgrep)
+         ("M-s l" . consult-line)
+         ("M-s L" . consult-line-multi)
+         ("M-s m" . consult-multi-occur)
+         ("M-s k" . consult-keep-lines)
+         ("M-s u" . consult-focus-lines)
+         ;; Isearch integration
+         ("M-s e" . consult-isearch)
+         (isearch-mode-map
+          ("M-e" . consult-isearch)                 ;; orig. isearch-edit-string
+          ("M-s e" . consult-isearch)               ;; orig. isearch-edit-string
+          ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
+          ("M-s L" . consult-line-multi)))          ;; needed by consult-line to detect isearch
+  :hook (completion-list-mode-hook . consult-preview-at-point-mode)
+  :init
+  (setq register-preview-delay 0
+        register-preview-function #'consult-register-format)
+  (advice-add #'register-preview :override #'consult-register-window)
+  (advice-add #'completing-read-multiple :override #'consult-completing-read-multiple)
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref)
+  :config
+  (consult-customize
+   consult-theme
+   :preview-key '(:debounce 0.2 any)
+   consult-ripgrep consult-git-grep consult-grep
+   consult-bookmark consult-recent-file consult-xref
+   consult--source-file consult--source-project-file consult--source-bookmark
+   :preview-key (kbd "M-."))
+  (setq consult-narrow-key "<") ;; (kbd "C-+")
+  (setq consult-project-root-function
+        (lambda ()
+          (when-let (project (project-current))
+            (car (project-roots project)))))
+  )
+;; marginalia
+(leaf marginalia
+  :straight t
+  :bind (("M-A" . marginalia-cycle)
+         (minibuffer-local-map
+          ("M-A" . marginalia-cycle)))
+  :init
+  (marginalia-mode))
+;; embark
+(leaf embark
+  :straight t
+  :after which-key
+  :bind
+  (("C-." . embark-act)         ;; pick some comfortable binding
+   ("C-;" . embark-dwim)        ;; good alternative: M-.
+   ("M-s B" . embark-bindings)) ;; alternative for `describe-bindings'
+  :init
+  (setq prefix-help-command #'embark-prefix-help-command)
+  :custom
+  (embark-action-indicator . (lambda (map _target)
+                               (which-key--show-keymap "Embark" map nil nil 'no-paging)
+                               #'which-key--hide-popup-ignore-command))
+  (embark-become-indicator . embark-action-indicator)
+  :config
+  (add-to-list 'display-buffer-alist
+               '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+                 nil
+                 (window-parameters (mode-line-format . none)))))
+;; embark-consult
+(leaf embark-consult
+  :straight t
+  :after (embark consult)
+  :hook (embark-collect-mode-hook . consult-preview-at-point-mode)
+  :require t)
+#+end_src
+
+[[https://github.com/raxod502/selectrum][selectrum]] + [[https://github.com/minad/consult][consult]] の場合はこちら．
+
+#+begin_src emacs-lisp :tangle no
+;;; completion system
+;; selectrum
+(leaf selectrum
+  :straight t
+  :config
+  (selectrum-mode +1)
+  (leaf selectrum-prescient :straight t
+    :config
+    (selectrum-prescient-mode +1)
+    (prescient-persist-mode +1))
+  )
+;; consult
+(leaf consult
+  :straight t
+  :bind (;; C-c bindings (mode-specific-map)
+         ("C-c h" . consult-history)
+         ("C-c m" . consult-mode-command)
+         ("C-c b" . consult-bookmark)
+         ("C-c k" . consult-kmacro)
+         ;; C-x bindings (ctl-x-map)
+         ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
+         ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
+         ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+         ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+         ;; Custom M-# bindings for fast register access
+         ("M-#" . consult-register-load)
+         ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
+         ("C-M-#" . consult-register)
+         ;; Other custom bindings
+         ("M-y" . consult-yank-pop)                ;; orig. yank-pop
+         ("<help> a" . consult-apropos)            ;; orig. apropos-command
+         ;; M-g bindings (goto-map)
+         ("M-g e" . consult-compile-error)
+         ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
+         ("M-g g" . consult-goto-line)             ;; orig. goto-line
+         ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+         ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
+         ("M-g m" . consult-mark)
+         ("M-g k" . consult-global-mark)
+         ("M-g i" . consult-imenu)
+         ("M-g I" . consult-imenu-multi)
+         ;; M-s bindings (search-map)
+         ("M-s f" . consult-find)
+         ("M-s F" . consult-locate)
+         ("M-s g" . consult-grep)
+         ("M-s G" . consult-git-grep)
+         ("M-s r" . consult-ripgrep)
+         ("M-s l" . consult-line)
+         ("M-s L" . consult-line-multi)
+         ("M-s m" . consult-multi-occur)
+         ("M-s k" . consult-keep-lines)
+         ("M-s u" . consult-focus-lines)
+         ;; Isearch integration
+         ("M-s e" . consult-isearch)
+         (isearch-mode-map
+          ("M-e" . consult-isearch)                 ;; orig. isearch-edit-string
+          ("M-s e" . consult-isearch)               ;; orig. isearch-edit-string
+          ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
+          ("M-s L" . consult-line-multi)))          ;; needed by consult-line to detect isearch
+  :hook (completion-list-mode-hook . consult-preview-at-point-mode)
+  :init
+  (setq register-preview-delay 0
+        register-preview-function #'consult-register-format)
+  (advice-add #'register-preview :override #'consult-register-window)
+  (advice-add #'completing-read-multiple :override #'consult-completing-read-multiple)
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref)
+  :config
+  (consult-customize
+   consult-theme
+   :preview-key '(:debounce 0.2 any)
+   consult-ripgrep consult-git-grep consult-grep
+   consult-bookmark consult-recent-file consult-xref
+   consult--source-file consult--source-project-file consult--source-bookmark
+   :preview-key (kbd "M-."))
+  (setq consult-narrow-key "<") ;; (kbd "C-+")
+  (setq consult-project-root-function
+        (lambda ()
+          (when-let (project (project-current))
+            (car (project-roots project)))))
+  )
+;; marginalia
+(leaf marginalia
+  :straight t
+  :bind (("M-A" . marginalia-cycle)
+         (minibuffer-local-map
+          ("M-A" . marginalia-cycle)))
+  :init
+  (marginalia-mode))
+;; embark
+(leaf embark
+  :straight t
+  :bind
+  (("C-." . embark-act)         ;; pick some comfortable binding
+   ("C-;" . embark-dwim)        ;; good alternative: M-.
+   ("M-s B" . embark-bindings)) ;; alternative for `describe-bindings'
+  :init
+  (setq prefix-help-command #'embark-prefix-help-command)
+  :config
+  (add-to-list 'display-buffer-alist
+               '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+                 nil
+                 (window-parameters (mode-line-format . none)))))
+;; embark-consult
+(leaf embark-consult
+  :straight t
+  :after (embark consult)
+  :hook (embark-collect-mode-hook . consult-preview-at-point-mode)
+  :require t)
+#+end_src
+
+こちらは更に古い設定．
+
+#+begin_src emacs-lisp :tangle no
+;;; completion system
+;; ivy + swiper + counsel
+(leaf ivy :straight t
+  :custom ((ivy-re-builders-alist . '((t      . ivy--regex-fuzzy)
+                                      (swiper . ivy--regex-plus)))
+           (ivy-use-selectable-prompt . t)
+           (ivy-mode     . t)
+           (counsel-mode . t))
+  :init
+  (leaf *ivy-requirements
+    :config
+    (leaf swiper :straight t
+      :commands (swiper-isearch)
+      :bind (("C-S-s" . swiper-isearch)
+             ("C-S-r" . swiper-isearch)))
+    (leaf counsel :straight t
+      :bind (([remap isearch-forward] . counsel-imenu)
+             ("C-x C-r" . counsel-recentf)))))
+(leaf ivy-hydra :straight t
+  :bind (:ivy-minibuffer-map
+         ("C-o" . hydra-ivy/body)))
+#+end_src
+
+#+begin_src emacs-lisp :tangle no
+;;; completion system
+;; counsel
+(leaf counsel :straight t
+  :commands (counsel-mode)
+  :hook (ivy-mode-hook . counsel-mode)
+  :custom
+  (counsel-yank-pop-separator . "\n<--------->\n")
+  :config
+  (setq ivy-initial-inputs-alist nil)
+  :blackout t)
+;; ivy
+(leaf ivy :straight t :d
+  :commands (ivy-mode)
+  :after all-the-icons
+  :hook (after-init-hook . ivy-mode)
+  :bind (("C-c C-r" . ivy-resume)
+         (:ivy-minibuffer-map
+          ("<tab>" . ivy-alt-done)
+          ("C-w" . ivy-yank-word)))
+  :custom
+  (ivy-use-virtual-buffers . t)
+  (ivy-count-format . "(%d/%d) ")
+  (ivy-wrap . t)
+  :config
+  (when window-system
+    ;; Use the FontAwesome "hand-o-right" icon for ivy-format-function when
+    ;; window system.  These are based on @takaxp's article, see
+    ;;   https://qiita.com/takaxp/items/2fde2c119e419713342b
+    ;; for more details.
+    (defface my--ivy-invisible-arrow
+      `((t :foreground ,(face-attribute 'default :background)))
+      "My face used by Ivy for unchoiced items.")
+    (defun my-ivy-format-function-arrow (cands)
+      "Transform CANDS into a string for minibuffer."
+      (ivy--format-function-generic
+       (lambda (str)
+         (concat (all-the-icons-faicon
+                  "hand-o-right")
+                 " "
+                 (ivy--add-face str 'ivy-current-match)))
+       (lambda (str)
+         (concat (all-the-icons-faicon
+                  "hand-o-right"
+                  :face 'my--ivy-invisible-arrow)
+                 " " str))
+       cands
+       "\n"))
+    (advice-add 'ivy-format-function-default :override #'my-ivy-format-function-arrow)
+    (defun my--update-ivy-invisible-arrow (&rest args)
+      "Update `my--ivy-invisible-arrow' face after change color theme."
+      (set-face-attribute 'my--ivy-invisible-arrow nil
+                          :foreground (face-attribute 'default :background)))
+    (advice-add 'load-theme :after #'my--update-ivy-invisible-arrow)))
+;; swiper (isearch)
+(leaf swiper :straight t
+  :commands (swiper-isearch)
+  :bind (("C-s" . swiper-isearch)
+         ("C-r" . swiper-isearch)))
+;; ivy-hydra
+(leaf ivy-hydra :straight t
+  :bind (:ivy-minibuffer-map
+         ("C-o" . hydra-ivy/body)))
+#+end_src
+
+キーバインドの自動表示は [[https://github.com/justbur/emacs-which-key][which-key]] を利用
+C-h の設定と合わせて，
+C-h-dispatch はいくつか追加した法が使い易いかもしれない．
+
+#+begin_src emacs-lisp
+;; which-key  
+(leaf which-key
+  :straight t
+  :bind (:which-key-mode-map
+         ("C-x DEL" . which-key-C-h-dispatch)
+         ("C-c DEL" . which-key-C-h-dispatch))
+  :hook (after-init-hook . which-key-mode)
+  :custom
+  (which-key-popup-type . 'side-window)
+  (which-key-side-window-location . 'bottom)
+  :blackout t)
+#+end_src
+
+** TODO 括弧
+[[https://github.com/Fuco1/smartparens][smartparens]] を使用．
+TeX の math-mode については見直しが必要．
+
+#+begin_src emacs-lisp
+;;; smartparens
+(leaf smartparens
+  :straight t
+  :bind ("M-p" . smartparens-mode)
+  ;; :bind ("<f9>" . smartparens-mode)
+  :hook ((after-init-hook . smartparens-global-mode)
+         (org-mode-hook . turn-on-smartparens-mode)
+         (latex-mode-hook . turn-on-smartparens-mode))
+  :require smartparens-config
+  :config
+  (sp-local-pair 'latex-mode "\\(" "\\)" :trigger "$" :trigger-wrap "$")
+  (sp-local-pair 'org-mode "\\(" "\\)" :trigger "$" :trigger-wrap "$")
+  (sp-local-pair 'org-mode "+" "+" :unless '(sp-point-after-word-p))
+  (show-smartparens-global-mode t)
+  ;; cf. show parethesis
+  ;;(if (fboundp 'show-paren-mode) (show-paren-mode t))
+  :blackout t)
+#+end_src
+
+** TODO アウトライン
+[[https://github.com/tj64/outline-magic][outline-magic]] の設定．
+少し再考が必要．
+
+以下の設定はこちら [fn:1]
+を参考．
+#+begin_src emacs-lisp
+;;; outline-magic
+(leaf outline-magic 
+  :preface
+  (defun my-outline-move-subtree-down (&optional arg)
+    "Move the currrent subtree down past ARG headlines of the same level.
+If the current subtree is folded, call `outline-hide-subtree' after move down."
+    (interactive "p")
+    (let* ((headers (or arg 1))
+           (movfunc (if (> headers 0) 'outline-get-next-sibling
+                      'outline-get-last-sibling))
+           (ins-point (make-marker))
+           (cnt (abs headers))
+           (folded (save-match-data
+                     (outline-end-of-heading)
+                     (outline-invisible-p)))
+           beg end txt)
+      ;; Select the tree
+      (outline-back-to-heading)
+      (setq beg (point))
+      (outline-end-of-subtree)
+      (if (= (char-after) ?\n) (forward-char 1))
+      (setq end (point))
+      ;; Find insertion point, with error handling
+      (goto-char beg)
+      (while (> cnt 0)
+        (or (funcall movfunc)
+            (progn (goto-char beg)
+                   (error "Cannot move past superior level")))
+        (setq cnt (1- cnt)))
+      (if (> headers 0)
+          ;; Moving forward - still need to move over subtree
+          (progn (outline-end-of-subtree)
+                 (if (= (char-after) ?\n) (forward-char 1))))
+      (move-marker ins-point (point))
+      (setq txt (buffer-substring beg end))
+      (delete-region beg end)
+      (insert txt)
+      (goto-char ins-point)
+      (if folded (outline-hide-subtree))
+      (move-marker ins-point nil)))
+  :straight t
+  :after outline
+  :bind (:outline-minor-mode-map
+              ("C-<tab>" . outline-cycle)
+              ("M-<left>" . outline-promote)
+              ("M-<right>" . outline-demote)
+              ("M-<up>" . outline-move-subtree-up)
+              ("M-<down>" . outline-move-subtree-down))
+  :config
+  (advice-add 'outline-move-subtree-down :override #'my-outline-move-subtree-down))
+#+end_src
+
+古い設定の例．
+
+#+begin_src emacs-lisp :tangle no
+(use-package outline :straight nil
+  :init
+  (use-package outline-magic :straight t
+    :bind ((:map outline-minor-mode-map
+                 ("C-c ," . outline-cycle)))
+    :hook ((LaTeX-mode . outline-minor-mode))
+    )
+  )
+#+end_src
+
+こちらは参考．
+#+begin_src emacs-lisp :tangle no
+(use-package outline :straight nil
+  :init
+  (use-package outline-magic :straight t
+    :ensure t
+    :bind ((:map outline-minor-mode-map
+                 ("C-c ," . outline-cycle)))
+    ;; :hook ((LaTeX-mode . my-add-outline-headings)
+    ;;        (LaTeX-mode . outline-minor-mode))
+    :init
+    (defun my-add-outline-headings ()
+      "Custom: Add promotion headings"
+      (setq outline-promotion-headings '("\\chapter"
+                                         "\\section"
+                                         "\\subsection"
+                                         "\\subsubsection"
+                                         "\\paragraph"
+                                         "\\subparagraph"
+                                         "\\begin{frame}"
+                                         )))
+    (add-hook 'LaTeX-mode 'my-add-outline-headings)
+    (add-hook 'LaTeX-mode 'outline-minor-mode)
+    )
+  )
+#+end_src
+
+** DONE Olivetti
+物書き用モードとして [[https://github.com/rnkn/olivetti][olivetti]] を導入．
+
+#+begin_src emacs-lisp
+;;; Olivetti
+(leaf olivetti
+  :straight t)
+#+end_src
+
+
+* 表示関係
+** DONE フォント
+Source Code Pro があれば標準フォントとして利用.
+
+#+begin_src emacs-lisp
+;;; fonts
+;; set up default font family
+(when (member "Source Code Pro" (font-family-list))
+  (set-face-attribute 'default nil :family "Source Code Pro" :height 180))
+#+end_src
+
+いくつかのパッケージで利用する all-the-icons を追加.
+フォントの自動インストールについてはこちら [fn:2] を参考にした．
+
+#+begin_src emacs-lisp
+;; install all-the-icons
+(leaf all-the-icons
+  :straight t
+  :if (window-system)
+  :require t
+  :config
+  (unless (member "all-the-icons" (font-family-list))
+    (all-the-icons-install-fonts t)))
+#+end_src
+
+** DONE テーマ
+こちら [fn:3] [fn:4]
+を参考にカスタムテーマを切り替えられるように設定．
+
+#+begin_src emacs-lisp
+;;; theme
+;; (leaf afternoon-theme     :straight t)
+;; (leaf atom-one-dark-theme :straight t)
+;; (leaf darkokai-theme      :straight t)
+;; (leaf github-theme        :straight t)
+;; (leaf monokai-theme       :straight t)
+;; (leaf paganini-theme      :straight t)
+;; (leaf solarized-theme     :straight t)
+;; (leaf sublime-themes      :straight t)
+;; (leaf org-beautify-theme  :straight t)
+;; (leaf color-theme-sanityinc-tomorrow :straight t)
+(leaf grandshell-theme :straight t)
+(leaf zenburn-theme :straight t)
+;; (leaf plan9-theme :straight t) ; alternative for olivetti-mode
+(leaf poet-theme :straight t) ; for olivetti-mode
+(leaf doom-themes :straight t
+  :custom
+  (doom-themes-enable-bold . t) ; if nil, bold is universally disabled
+  (doom-themes-enable-italic . t) ; if nil, italics is universally disabled
+  (doom-themes-treemacs-theme . "doom-colors") ; use the colorful treemacs theme
+  :config
+  (doom-themes-visual-bell-config) ; enable flashing mode-line on errors
+  ;; (doom-themes-neotree-config) ; enable custom neotree theme
+  ;; (doom-themes-treemacs-config) ; enable custom treemacs theme
+  (doom-themes-org-config)) ; corrects/improves org-mode's native fontification
+;; cycle custom theme
+(leaf *my-theme-cycle
+  :init
+  (setq my-themes (list 'grandshell
+                        'doom-Iosvkem
+                        'doom-dracula
+		        'doom-one
+		        ;; 'doom-city-lights
+		        ;; 'doom-nord
+		        ;; 'doom-spacegrey
+		        ;; 'doom-opera
+		        ;; 'doom-molokai
+		        ;; 'doom-fairy-floss
+		        ;; 'atom-one-dark
+		        ;; 'afternoon
+		        ;; 'darkokai
+		        ;; 'paganini
+		        ;; 'plan9
+		        'poet
+		        'poet-monochrome
+		        'poet-dark
+		        ;; 'poet-dark-monochrome
+                        'zenburn)
+        ) 
+  (defun my-theme-cycle ()
+    "Cycle custom theme."
+    (interactive)
+    (disable-theme (car my-curr-theme)) 
+    (setq my-curr-theme (cdr my-curr-theme))
+    (if (null my-curr-theme) (setq my-curr-theme my-themes))
+    (load-theme (car my-curr-theme) t)
+    (message "%s" (car my-curr-theme)))
+  :config
+  (global-set-key [f5] 'my-theme-cycle)
+  (setq my-curr-theme my-themes)
+  (load-theme (car my-curr-theme) t))
+#+end_src
+
+#+begin_src emacs-lisp :tangle no
+;;; theme
+;; (leaf afternoon-theme     :straight t)
+;; (leaf atom-one-dark-theme :straight t)
+;; (leaf darkokai-theme      :straight t)
+;; (leaf github-theme        :straight t)
+;; (leaf monokai-theme       :straight t)
+;; (leaf paganini-theme      :straight t)
+;; (leaf solarized-theme     :straight t)
+;; (leaf sublime-themes      :straight t)
+;; (leaf org-beautify-theme  :straight t)
+;; (leaf color-theme-sanityinc-tomorrow :straight t)
+(leaf grandshell-theme :straight t)
+(leaf zenburn-theme :straight t)
+(leaf doom-themes :straight t
+  :custom
+  (doom-themes-enable-bold . t) ; if nil, bold is universally disabled
+  (doom-themes-enable-italic . t) ; if nil, italics is universally disabled
+  (doom-themes-treemacs-theme . "doom-colors") ; use the colorful treemacs theme
+  :config
+  (doom-themes-visual-bell-config) ; enable flashing mode-line on errors
+  ;; (doom-themes-neotree-config) ; enable custom neotree theme
+  ;; (doom-themes-treemacs-config) ; enable custom treemacs theme
+  (doom-themes-org-config)) ; corrects/improves org-mode's native fontification
+;; cycle custom theme
+(setq my-themes (list 'grandshell
+                      'doom-Iosvkem
+                      'doom-dracula
+		      'doom-one
+		      ;; 'doom-city-lights
+		      ;; 'doom-nord
+		      ;; 'doom-spacegrey
+		      ;; 'doom-opera
+		      ;; 'doom-molokai
+		      ;; 'doom-fairy-floss
+		      ;; 'atom-one-dark
+		      ;; 'afternoon
+		      ;; 'darkokai
+		      ;; 'paganini
+                      'zenburn)
+      ) 
+(defun my-theme-cycle ()
+  "Cycle custom theme."
+  (interactive)
+  (disable-theme (car my-curr-theme)) 
+  (setq my-curr-theme (cdr my-curr-theme))
+  (if (null my-curr-theme) (setq my-curr-theme my-themes))
+  (load-theme (car my-curr-theme) t)
+  (message "%s" (car my-curr-theme)))
+(global-set-key [f5] 'my-theme-cycle)
+(setq my-curr-theme my-themes)
+(load-theme (car my-curr-theme) t)
+#+end_src
+
+** DONE 最大化
+CUI でない場合は最大化 (fullscreen)．
+
+#+begin_src emacs-lisp
+;;; full screen  
+(leaf *my-fullscreen
+  :if (display-graphic-p)
+  :init
+  (defun toggle-fullscreen ()
+    "Toggle full screen"
+    (interactive)
+    (set-frame-parameter
+     nil 'fullscreen
+     (when (not (frame-parameter nil 'fullscreen)) 'fullboth)))
+  :config
+  (if (boundp 'ns-pop-up-frames)
+      (setq ns-pop-up-frames nil)) ; disable frame pop-up
+  (tool-bar-mode 0) ; disable tool-bar
+  (scroll-bar-mode 0) ; disable scroll-bar
+  (toggle-fullscreen))
+#+end_src
+
+
+* 言語関係
+** DONE 日本語入力
+[[https://github.com/skk-dev/ddskk][ddskk]] の設定．
+SKKそのものの細かな設定は ".ddskk/init" で行う．
+TeX表記のため，"\"と"$"を特別に扱う．
+
+#+begin_src emacs-lisp
+;;; skk
+(leaf ddskk
+  :straight t
+  :bind (("C-x C-j" . skk-mode)
+	 ("C-x j"   . skk-mode)
+	 ("C-x C-o" . skk-toggle-kutouten))
+  :hook (skk-mode-hook . (lambda ()
+                           (if (or (eq major-mode 'latex-mode) (eq major-mode 'org-mode))
+                               (progn
+                                 (define-key skk-j-mode-map "\\" 'self-insert-command)
+                                 (define-key skk-j-mode-map "$" 'self-insert-command)))))
+  :require skk skk-study
+  :custom
+  (default-input-method . "japanese-skk")
+  (skk-byte-compile-init-file . nil)
+  (skk-user-directory . "~/.ddskk"))
+#+end_src
+
+** DONE migemo
+migemo を利用した isearch の設定．
+こちら [fn:5] を参考．
+
+#+begin_src emacs-lisp
+;;; migemo
+(leaf migemo
+  :if (executable-find "cmigemo")
+  :straight t
+  :custom
+  (migemo-command . "cmigemo")
+  (migemo-options . '("-q" "--emacs"))
+  (migemo-user-dictionary . nil)
+  (migemo-regex-dictionary . nil)
+  (migemo-coding-system . 'utf-8-unix)
+  :init
+  (cond
+   ((file-exists-p "/usr/local/share/migemo/utf-8/migemo-dict")
+    (setq migemo-dictionary "/usr/local/share/migemo/utf-8/migemo-dict"))
+   ((file-exists-p "/opt/homebrew/share/migemo/utf-8/migemo-dict")
+    (setq migemo-dictionary "/opt/homebrew/share/migemo/utf-8/migemo-dict")))
+  :require t
+  :config
+  (migemo-init))
+#+end_src
+
+#+begin_src emacs-lisp :tangle no
+;;; migemo
+(use-package migemo
+  :if (executable-find "cmigemo")
+  :custom
+  (migemo-command "cmigemo")
+  (migemo-options '("-q" "--emacs"))
+  (migemo-user-dictionary nil)
+  (migemo-regex-dictionary nil)
+  (migemo-coding-system 'utf-8-unix)
+  :config
+  (when (file-exists-p "/usr/local/share/migemo/utf-8/migemo-dict")
+    (setq migemo-dictionary "/usr/local/share/migemo/utf-8/migemo-dict"))
+  (when (file-exists-p "/opt/homebrew/share/migemo/utf-8/migemo-dict")
+    (setq migemo-dictionary "/opt/homebrew/share/migemo/utf-8/migemo-dict"))
+  ;; (setq migemo-command "cmigemo"
+  ;;       migemo-options '("-q" "--emacs")
+  ;;       migemo-dictionary "/usr/local/share/migemo/utf-8/migemo-dict"
+  ;;       migemo-user-dictionary nil
+  ;;       migemo-regex-dictionary nil
+  ;;       migemo-coding-system 'utf-8-unix)
+  (migemo-init))
+#+end_src
+
+** DONE 機械翻訳
+[[https://www.deepl.com/][DeepL]] の API を利用したもの．
+api-key のところの書き方は要検討．
+api-url は変更があるようなので注意．
+
+#+begin_src emacs-lisp
+;;; DeepL
+(leaf txl
+  :preface
+  (setq my-api-key-file "~/etc/api-key")
+  :if (file-exists-p my-api-key-file)
+  :straight (txl :type git :host github :repo "tmalsburg/txl.el")
+  :bind ("C-x t" . txl-translate-region-or-paragraph)
+  :init
+  (with-temp-buffer
+    (insert-file-contents my-api-key-file)
+    (keep-lines "deepl:" (point-min) (point-max)) 
+    (setq my-api-key (when (string-match "deepl: \\(.*\\)" (buffer-string))
+                       (match-string 1 (buffer-string)))))
+  (setq txl-languages '(JA . EN-US))
+  (setq txl-deepl-api-url "https://api-free.deepl.com/v2/translate")
+  (setq txl-deepl-api-key my-api-key))
+#+end_src
+
+#+begin_src emacs-lisp :tangle no
+;;; DeepL
+(setq my-api-key-file "~/etc/api-key")
+(when (file-exists-p my-api-key-file)
+  (with-temp-buffer
+    (insert-file-contents my-api-key-file)
+    (keep-lines "deepl:" (point-min) (point-max)) 
+    (setq my-api-key (when (string-match "deepl: \\(.*\\)" (buffer-string))
+                       (match-string 1 (buffer-string))))))
+(leaf txl
+  :straight (txl :type git :host github :repo "tmalsburg/txl.el")
+  :if (file-exists-p my-api-key-file)
+  :bind ("C-x t" . txl-translate-region-or-paragraph)
+  :init
+  (setq txl-languages '(JA . EN-US))
+  (setq txl-deepl-api-url "https://api-free.deepl.com/v2/translate")
+  (setq txl-deepl-api-key my-api-key))
+#+end_src
+
+
+* TeX関係
+** TODO auctex
+設定が整理できていない．
+
+#+begin_src emacs-lisp
+;;; auctex
+(leaf tex
+  :straight auctex
+  ;; :hook ((LaTeX-mode-hook . TeX-PDF-mode)
+  ;;        ;; (LaTeX-mode-hook . auctex-latexmk-setup)
+  ;;        (LaTeX-mode-hook . LaTeX-math-mode)
+  ;;        (LaTeX-mode-hook . outline-minor-mode)
+  ;;        (LaTeX-mode-hook . turn-on-reftex))
+  ;; (add-hook 'plain-TeX-mode-hook
+  ;;           (lambda () (set (make-local-variable 'TeX-electric-math)
+  ;;       		    (cons "$" "$"))))
+  ;; (add-hook 'LaTeX-mode-hook
+  ;;           (lambda () (set (make-local-variable 'TeX-electric-math)
+  ;;       		    (cons "\\(" "\\)"))))
+  :init
+  ;; @see http://miyazakikenji.wordpress.com/2013/06/21/gnupack-の-emacs-に-auctex/
+  (add-hook 'LaTeX-mode-hook 'TeX-PDF-mode)
+  ;; (add-hook 'LaTeX-mode-hook 'auctex-latexmk-setup)
+  (add-hook 'LaTeX-mode-hook 'LaTeX-math-mode)
+  (add-hook 'LaTeX-mode-hook 'outline-minor-mode)
+  ;; (add-hook 'plain-TeX-mode-hook
+  ;;           (lambda () (set (make-local-variable 'TeX-electric-math)
+  ;;       		    (cons "$" "$"))))
+  ;; (add-hook 'LaTeX-mode-hook
+  ;;           (lambda () (set (make-local-variable 'TeX-electric-math)
+  ;;       		    (cons "\\(" "\\)"))))
+  ;; @see http://stackoverflow.com/questions/14629198/redefine-auctex-font-and-compile-keybindings
+  ;; (defun my-LaTeX-hook ()
+  ;;   (local-set-key "\C-c\C-t" 'TeX-command-master)
+  ;;   (setq TeX-default-mode 'japanese-latex-mode)
+  ;;   ;;  (setq TeX-engine-alist TeX-engine-alist-builtin)
+  ;;   (setq TeX-engine 'luatex))
+  ;; (add-hook 'LaTeX-mode-hook 'my-LaTeX-hook)
+  ;; for skk
+  ;; (defun my-TeX-insert-dollar ()
+  ;;   (interactive) (TeX-insert-dollar 2) (backward-char 1))
+  ;; (defun my-LaTeX-insert-dollar ()
+  ;;   (interactive) (insert "\\(\\)") (backward-char 2) (skk-latin-mode t))
+  ;; reftex
+  ;; (add-hook 'LaTeX-mode-hook 'turn-on-reftex)
+  :custom
+  (TeX-default-mode . 'japanese-latex-mode)
+  (TeX-engine . 'luatex)
+  (TeX-view-program-list . '(("DVIviewer" "dviout %o")
+			     ("PDFviewer" "open %o")))
+  (TeX-view-program-selection . '((output-dvi "DVIviewer")
+                                  (output-pdf "PDFviewer")))
+  (font-latex-fontify-sectioning . 1.0)
+  (font-latex-fontify-script . nil)
+  (TeX-electric-sub-and-superscript . t)
+  (reftex-plug-into-AUCTeX . t)
+  (kinsoku-limit . 10)
+  (reftex-insert-label-flags . '("s" "sfte"))
+  (reftex-label-alist . '((nil ?e nil "\\eqref{%s}" nil nil)))
+  (reftex-default-bibliography . '("~/lib/tex/bib/papers.bib"))
+  :config
+  (leaf auctex-latexmk
+    :straight t
+    :config
+    (auctex-latexmk-setup))
+  ;; (setq TeX-view-program-list '(("DVIviewer" "dviout %o")
+  ;;       			("PDFviewer" "open %o")))
+  ;; (setq TeX-view-program-selection '((output-dvi "DVIviewer")
+  ;;                                    (output-pdf "PDFviewer")))
+  ;; (setq font-latex-fontify-sectioning 1.0)
+  ;; (setq font-latex-fontify-script nil)
+  ;; (setq TeX-electric-sub-and-superscript t)
+  ;; ;; RefTeX with AUCTeX
+  ;; (setq reftex-plug-into-AUCTeX t)
+  ;; ;; kinsoku.el
+  ;; (setq kinsoku-limit 10)
+  ;; ;; 数式のラベル作成時にも自分でラベルを入力できるようにする
+  ;; (setq reftex-insert-label-flags '("s" "sfte"))
+  ;; ;; \eqrefを使う
+  ;; (setq reftex-label-alist
+  ;;       '((nil ?e nil "\\eqref{%s}" nil nil)))
+  ;; (setq reftex-default-bibliography '("~/lib/tex/bib/refs.bib"))
+  )
+#+end_src
+
+#+begin_src emacs-lisp :tangle no
+;;; auctex
+(use-package tex
+  :straight auctex
+  :defer t
+  ;; :hook ((LaTeX-mode-hook . TeX-PDF-mode)
+  ;;        ;; (LaTeX-mode-hook . auctex-latexmk-setup)
+  ;;        (LaTeX-mode-hook . LaTeX-math-mode)
+  ;;        (LaTeX-mode-hook . outline-minor-mode)
+  ;;        (LaTeX-mode-hook . turn-on-reftex))
+  ;; (add-hook 'plain-TeX-mode-hook
+  ;;           (lambda () (set (make-local-variable 'TeX-electric-math)
+  ;;       		    (cons "$" "$"))))
+  ;; (add-hook 'LaTeX-mode-hook
+  ;;           (lambda () (set (make-local-variable 'TeX-electric-math)
+  ;;       		    (cons "\\(" "\\)"))))
+  :init
+  ;; @see http://miyazakikenji.wordpress.com/2013/06/21/gnupack-の-emacs-に-auctex/
+  (add-hook 'LaTeX-mode-hook 'TeX-PDF-mode)
+  ;; (add-hook 'LaTeX-mode-hook 'auctex-latexmk-setup)
+  (add-hook 'LaTeX-mode-hook 'LaTeX-math-mode)
+  (add-hook 'LaTeX-mode-hook 'outline-minor-mode)
+  ;; (add-hook 'plain-TeX-mode-hook
+  ;;           (lambda () (set (make-local-variable 'TeX-electric-math)
+  ;;       		    (cons "$" "$"))))
+  ;; (add-hook 'LaTeX-mode-hook
+  ;;           (lambda () (set (make-local-variable 'TeX-electric-math)
+  ;;       		    (cons "\\(" "\\)"))))
+  ;; @see http://stackoverflow.com/questions/14629198/redefine-auctex-font-and-compile-keybindings
+  ;; (defun my-LaTeX-hook ()
+  ;;   (local-set-key "\C-c\C-t" 'TeX-command-master)
+  ;;   (setq TeX-default-mode 'japanese-latex-mode)
+  ;;   ;;  (setq TeX-engine-alist TeX-engine-alist-builtin)
+  ;;   (setq TeX-engine 'luatex))
+  ;; (add-hook 'LaTeX-mode-hook 'my-LaTeX-hook)
+  ;; for skk
+  ;; (defun my-TeX-insert-dollar ()
+  ;;   (interactive) (TeX-insert-dollar 2) (backward-char 1))
+  ;; (defun my-LaTeX-insert-dollar ()
+  ;;   (interactive) (insert "\\(\\)") (backward-char 2) (skk-latin-mode t))
+  ;; reftex
+  ;; (add-hook 'LaTeX-mode-hook 'turn-on-reftex)
+  :custom
+  (TeX-default-mode 'japanese-latex-mode)
+  (TeX-engine 'luatex)
+  (TeX-view-program-list '(("DVIviewer" "dviout %o")
+			   ("PDFviewer" "open %o")))
+  (TeX-view-program-selection '((output-dvi "DVIviewer")
+                                (output-pdf "PDFviewer")))
+  (font-latex-fontify-sectioning 1.0)
+  (font-latex-fontify-script nil)
+  (TeX-electric-sub-and-superscript t)
+  (reftex-plug-into-AUCTeX t)
+  (kinsoku-limit 10)
+  (reftex-insert-label-flags '("s" "sfte"))
+  (reftex-label-alist '((nil ?e nil "\\eqref{%s}" nil nil)))
+  (reftex-default-bibliography '("~/lib/tex/bib/papers.bib"))
+  :config
+  (use-package auctex-latexmk :straight t
+    :config
+    (auctex-latexmk-setup))
+  ;; (setq TeX-view-program-list '(("DVIviewer" "dviout %o")
+  ;;       			("PDFviewer" "open %o")))
+  ;; (setq TeX-view-program-selection '((output-dvi "DVIviewer")
+  ;;                                    (output-pdf "PDFviewer")))
+  ;; (setq font-latex-fontify-sectioning 1.0)
+  ;; (setq font-latex-fontify-script nil)
+  ;; (setq TeX-electric-sub-and-superscript t)
+  ;; ;; RefTeX with AUCTeX
+  ;; (setq reftex-plug-into-AUCTeX t)
+  ;; ;; kinsoku.el
+  ;; (setq kinsoku-limit 10)
+  ;; ;; 数式のラベル作成時にも自分でラベルを入力できるようにする
+  ;; (setq reftex-insert-label-flags '("s" "sfte"))
+  ;; ;; \eqrefを使う
+  ;; (setq reftex-label-alist
+  ;;       '((nil ?e nil "\\eqref{%s}" nil nil)))
+  ;; (setq reftex-default-bibliography '("~/lib/tex/bib/refs.bib"))
+  )
+#+end_src
+
+#+begin_src emacs-lisp :tangle no
+;;; auctex
+; (use-package auctex
+;   :straight (auctex :local-repo "auctex")
+(use-package tex
+  :straight auctex
+  :defer t
+  :init
+  ;; @see http://miyazakikenji.wordpress.com/2013/06/21/gnupack-の-emacs-に-auctex/
+  (add-hook 'LaTeX-mode-hook 'TeX-PDF-mode)
+  (add-hook 'LaTeX-mode-hook 'auctex-latexmk-setup)
+  (add-hook 'LaTeX-mode-hook 'LaTeX-math-mode)
+  (add-hook 'LaTeX-mode-hook 'outline-minor-mode)
+  (add-hook 'plain-TeX-mode-hook
+	    (lambda () (set (make-local-variable 'TeX-electric-math)
+			    (cons "$" "$"))))
+  (add-hook 'LaTeX-mode-hook
+	    (lambda () (set (make-local-variable 'TeX-electric-math)
+			    (cons "\\(" "\\)"))))
+  ;; @see http://stackoverflow.com/questions/14629198/redefine-auctex-font-and-compile-keybindings
+  (defun my-LaTeX-hook ()
+    (local-set-key "\C-c\C-t" 'TeX-command-master)
+    (setq TeX-default-mode 'japanese-latex-mode)
+    ;;  (setq TeX-engine-alist TeX-engine-alist-builtin)
+    (setq TeX-engine 'luatex))
+  (add-hook 'LaTeX-mode-hook 'my-LaTeX-hook)
+  ;; for skk
+  (defun my-TeX-insert-dollar ()
+    (interactive) (TeX-insert-dollar 2) (backward-char 1))
+  (defun my-LaTeX-insert-dollar ()
+    (interactive) (insert "\\(\\)") (backward-char 2) (skk-latin-mode t))
+  (add-hook 'skk-mode-hook
+            (lambda ()
+              (if (or (eq major-mode 'latex-mode) (eq major-mode 'org-mode))
+                  (progn
+                    (define-key skk-j-mode-map "\\" 'self-insert-command)
+                    (define-key skk-j-mode-map "$" 'my-LaTeX-insert-dollar)
+                    (define-key skk-latin-mode-map "$" 'my-TeX-insert-dollar)
+		    ))
+              ))
+  ;; reftex
+  (add-hook 'LaTeX-mode-hook 'turn-on-reftex)
+  :config
+  (setq TeX-view-program-list '(("DVIviewer" "dviout %o")
+				("PDFviewer" "open %o")))
+  (setq TeX-view-program-selection '((output-dvi "DVIviewer")
+                                     (output-pdf "PDFviewer")))
+  (setq font-latex-fontify-sectioning 1.0)
+  (setq font-latex-fontify-script nil)
+  (setq TeX-electric-sub-and-superscript t)
+  ;; RefTeX with AUCTeX
+  (setq reftex-plug-into-AUCTeX t)
+  ;; kinsoku.el
+  (setq kinsoku-limit 10)
+  ;; 数式のラベル作成時にも自分でラベルを入力できるようにする
+  (setq reftex-insert-label-flags '("s" "sfte"))
+  ;; \eqrefを使う
+  (setq reftex-label-alist
+	'((nil ?e nil "\\eqref{%s}" nil nil)))
+  (setq reftex-default-bibliography '("~/lib/tex/bib/refs.bib"))
+  )
+(use-package auctex-latexmk
+  :straight t
+;;  :straight (auctex-latexmk :local-repo "auctex-latexmk")
+  :after (auctex))
+#+end_src
+
+;; RefTeXで使用するbibファイルを指定する
+;; (setq reftex-default-bibliography '("~/foo.bib" "~/bar.bib"))
+;; https://emacs.stackexchange.com/questions/40589/
+;; (setq TeX-outline-extra '(("\\\\begin{frame}[{\[].+" 5)))
+;; https://emacs.stackexchange.com/questions/3072/
+;; extra outline headers 
+;; (setq TeX-outline-extra
+;; 	'(("%chapter" 1)
+;;         ("%section" 2)
+;; 	  ("frametitle" 1)
+;;         ("\\\\frametitle" 2)))
+;;   ;; :straight (auctex-latexmk :type git :host github
+;;   ;; 			    :repo "tom-tan/auctex-latexmk")
+;;   )
+;; (straight-use-package '(auctex-latexmk :local-repo "auctex-latexmk"))
+
+** TODO bibtex
+biblatex用に設定．
+bibtexとebib/ref-texの連携を整理した方がよい．
+
+#+begin_src emacs-lisp
+;;; bibtex mode
+(leaf bibtex-mode
+  :straight t
+  :mode "\\.bib\\'"
+  :commands (ebib)
+  :init
+  (add-hook 'bibtex-mode-hook
+	    #'(lambda () (auto-fill-mode 0)))
+  :custom
+  (bibtex-dialect . "biblatex")
+  (bibtex-mode-user-optional-fields . 
+   '("sortname" "keywords" "abstract" "annotation" "file"))
+  (bibtex-user-optional-fields . 
+   '(("sortname" "for sorting Japanese names (ignored)")
+     ("keywords" "Personal Keywords (ignored)")
+     ("abstract" "If available (ignored)")
+     ("annotation" "Personal annotation (ignored)")
+     ("file" "local file location (ignored)")))
+  (bibtex-autokey-names . 1)
+  (bibtex-autokey-names-stretch . 2)
+  (bibtex-autokey-additional-names . "_etal")
+  (bibtex-autokey-name-separator . "")
+  (bibtex-autokey-year-length . 4)
+  (bibtex-autokey-titlewords . 0)
+  (bibtex-autokey-titlewords-stretch . 0)
+  (bibtex-autokey-name-year-separator . "")
+  (bibtex-autokey-preserve-case . t)
+  (bibtex-autokey-name-case-convert-function . 'identity)
+  )
+#+end_src
+
+#+begin_src emacs-lisp :tangle no
+;;; bibtex mode
+(use-package bibtex-mode :straight t
+  :mode "\\.bib\\'"
+  :commands (ebib)
+  :init
+  (add-hook 'bibtex-mode-hook
+	    #'(lambda () (auto-fill-mode 0)))
+  :custom
+  (bibtex-dialect "biblatex")
+  (bibtex-mode-user-optional-fields 
+   '("sortname" "keywords" "abstract" "annotation" "file"))
+  (bibtex-user-optional-fields
+   '(("sortname" "for sorting Japanese names (ignored)")
+     ("keywords" "Personal Keywords (ignored)")
+     ("abstract" "If available (ignored)")
+     ("annotation" "Personal annotation (ignored)")
+     ("file" "local file location (ignored)")))
+  (bibtex-autokey-names 1)
+  (bibtex-autokey-names-stretch 2)
+  (bibtex-autokey-additional-names "_etal")
+  (bibtex-autokey-name-separator "")
+  (bibtex-autokey-year-length 4)
+  (bibtex-autokey-titlewords 0)
+  (bibtex-autokey-titlewords-stretch 0)
+  (bibtex-autokey-name-year-separator "")
+  (bibtex-autokey-preserve-case t)
+  (bibtex-autokey-name-case-convert-function 'identity)
+  )
+#+end_src
+
+** TODO ebib
+文献管理はbiblatexに対応しているebibを利用．
+"C-c e" を prefix として org-ref も併用する．
+
+#+begin_src emacs-lisp
+  ;;; ebib
+(leaf ebib
+  :straight t
+  :bind
+  (("C-c e o" . ebib)
+   ("C-c e c" . ebib-insert-citation))
+  :custom
+  (ebib-bibtex-dialect . "biblatex")
+  (ebib-bib-search-dirs . "~/lib/tex/bib")
+  (ebib-preload-bib-files . '("~/lib/tex/bib/papers.bib"))
+  (ebib-file-search-dirs . '("~/Documents/Mendeley Desktop"))
+  ;; (ebib-extra-fields . 
+  ;;  '((BibTeX "annote" "keywords" "doi" "file")
+  ;;    (biblatex "annotation" "keywords" "file")))
+  ;;  (ebib-layout 'custum)
+  (ebib-file-associations . '(("pdf" . "open")))
+  (ebib-keywords-use-only-file . t)
+  (ebib-keywords-file . "~/lib/tex/bib/mykeywords.txt")
+  (ebib-keywords-file-save-on-exit . 'always)
+  (ebib-citation-commands . (quote ((any (("cite" "\\cite%<[%A]%>{%K}")))
+                                    (org-mode (("cite" "[[cite:%K][%A;%A;%A]]"))))))
+  :config
+  (define-key ebib-multiline-mode-map
+    "\C-c\C-c" 'ebib-quit-multiline-buffer-and-save)
+  (define-key ebib-multiline-mode-map
+    "\C-c\C-q" 'ebib-cancel-multiline-buffer)
+  (define-key ebib-multiline-mode-map
+    "\C-c\C-s" 'ebib-save-from-multiline-buffer)
+  (defun bibtex-autokey-get-year ()
+    "Return year field contents as a string obeying `bibtex-autokey-year-length'."
+    (let ((yearfield (bibtex-autokey-get-field "date")))
+      (substring yearfield 0 bibtex-autokey-year-length)))
+  )
+#+end_src
+
+#+begin_src emacs-lisp :tangle no
+;;; ebib
+(use-package ebib :straight t
+  :defer t
+  :bind (("C-c e" . ebib))
+  :custom
+  (ebib-bibtex-dialect "biblatex")
+  (ebib-bib-search-dirs "~/lib/tex/bib")
+  (ebib-preload-bib-files '("~/lib/tex/bib/papers.bib"))
+  (ebib-file-search-dirs '("~/Documents/Mendeley Desktop"))
+  ;; (ebib-extra-fields
+  ;;  '((BibTeX "annote" "keywords" "doi" "file")
+  ;;    (biblatex "annotation" "keywords" "file")))
+  ;;  (ebib-layout 'custum)
+  (ebib-file-associations '(("pdf" . "open")))
+  (ebib-keywords-use-only-file t)
+  (ebib-keywords-file "~/lib/tex/bib/mykeywords.txt")
+  (ebib-keywords-file-save-on-exit 'always)
+  :config
+  (define-key ebib-multiline-mode-map
+    "\C-c\C-c" 'ebib-quit-multiline-buffer-and-save)
+  (define-key ebib-multiline-mode-map
+    "\C-c\C-q" 'ebib-cancel-multiline-buffer)
+  (define-key ebib-multiline-mode-map
+    "\C-c\C-s" 'ebib-save-from-multiline-buffer)
+  (defun bibtex-autokey-get-year ()
+    "Return year field contents as a string obeying `bibtex-autokey-year-length'."
+    (let ((yearfield (bibtex-autokey-get-field "date")))
+      (substring yearfield 0 bibtex-autokey-year-length)))
+  )
+#+end_src
+
+
+* R関係
+** DONE ESS
+とりあえず [[https://ess.r-project.org/index.php?Section=home][ESS]] に落ち着いている．
+
+#+begin_src emacs-lisp
+;;; ESS
+(leaf ess
+  :straight t
+  :mode (("\\.[rR]$" . R-mode))
+  :commands (R-mode R)
+  :config
+  )
+#+end_src
+
+
+* Org関係
+** DONE 本体
+基本的な設定は過去を引き摺っているので，
+随時更新が必要．
+
+#+begin_src emacs-lisp
+;;; org-mode
+(leaf org
+  :straight t
+  :bind (("C-c l" . org-store-link)
+	 ("C-c c" . org-capture)
+	 ("C-c a" . org-agenda)
+	 ("C-c b" . org-switchb))
+  :mode (("\\.org\\'" . org-mode))
+  :hook ((org-babel-after-execute-hook . org-display-inline-images)   
+         (org-mode-hook . org-display-inline-images))
+  :custom
+  (org-directory . "~/Documents/org/")
+  (org-agenda-files . '("~/Documents/org/inbox.org"
+                        "~/Documents/org/ical.org"
+                        "~/Documents/org/gtd.org"
+                        "~/Documents/org/tickler.org"))
+  (org-capture-templates . '(("t" "Todo [inbox]" entry ; 一般的なtodo
+                              (file "inbox.org") 
+                              "* TODO %^{title} %^g\n  entered on %U\n%?") 
+                             ("T" "Tickler [tickler]" entry ; 厄介な問題
+                              (file+headline "tickler.org" "Tickler")
+                              "* %i%? \n %U")
+                             ("m" "Memo [notes]" entry ; 雑記
+                              (file "notes.org") 
+                              "* %^{topic} %T %^g\n%i%?"
+                              :empty-lines 1
+                              :jump-to-captured t) 
+                             ;; ("j" "Journal" entry ; 日記
+                             ;;  (file+datetree+prompt "journal.org")
+                             ;;  "* %^{title} %^g\n  entered on %U\n  %?\n  %i\n  %a\n")
+                             ("u" "Usage [usage]" entry ; orgの使い方メモ
+                              (file+headline "usage.org" "Unfiled")
+                              "* %?\n")
+                             ("c" "Calendar" entry ; 不要かも
+                              (file+headline "ical.org" "Schedule")
+                              "** TODO %?\n\t")
+                             ))
+  (org-refile-targets . '(("~/Documents/org/ical.org" :maxlevel . 1)
+                          ("~/Documents/org/gtd.org" :maxlevel . 3)
+                          ("~/Documents/org/tickler.org" :maxlevel . 2)))
+  (org-agenda-custom-commands . '(("P" "Projects"   
+                                   ((tags "PROJECT")))
+                                  ("H" "Office and Home Lists"
+                                   ((agenda)
+                                    (tags-todo "OFFICE")
+                                    (tags-todo "HOME")
+                                    (tags-todo "COMPUTER")
+                                    (tags-todo "VIDEO")
+                                    (tags-todo "READING")))
+                                  ("D" "Daily Action List"
+                                   (
+                                    (agenda "" ((org-agenda-ndays 1)
+		                                (org-agenda-sorting-strategy
+		                                 (quote ((agenda time-up priority-down tag-up) )))
+		                                (org-deadline-warning-days 0)
+		                                ))))
+                                  ))
+  ;; (org-adapt-indentation t)
+  (org-use-speed-commands . t)
+  (org-confirm-babel-evaluate . nil) ;; 評価の確認
+  :require org-habit org-tempo
+  :config
+  ;; (leaf org-habit :straight nil)
+  ;; (leaf org-tempo :straight nil)
+  ;; (setq org-src-preserve-indentation nil
+  ;;	org-edit-src-content-indentation 2)
+  (add-to-list 'org-structure-template-alist
+	       '("r" . "src R"))
+  (add-to-list 'org-structure-template-alist
+	       '("m" . "src latex"))
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((R . t)
+     (org . t)
+     ;;     (ditaa . t)
+     (latex . t)
+     ;;     (dot . t)
+     (emacs-lisp . t)
+     ;;     (gnuplot . t)
+     ;;     (screen . nil)
+     (shell . t)
+     ;;     (sql . nil)
+     ;;     (sqlite . t)
+     ))
+  (org-add-link-type 
+   "cite" 'ebib
+   (lambda (path desc format)
+     (cond
+      ((eq format 'html)
+       (format "(<cite>%s</cite>)" path))
+      ((eq format 'latex)
+       (if (or (not desc) (equal 0 (search "cite:" desc)))
+           (format "\\cite{%s}" path)
+         (format "\\cite[%s][%s]{%s}"
+                 (cadr (split-string desc ";"))
+                 (car (split-string desc ";"))  path))))))
+  )
+#+end_src
+
+** DONE 拡張
+こまごました package を追加中．
+
+#+begin_src emacs-lisp
+;; download
+(leaf org-download :straight t)
+;; pdfview (replaced with org-pdftools)
+;; (leaf org-pdfview :straight t)
+(leaf org-pdftools
+  :straight t
+  :hook (org-mode-hook . org-pdftools-setup-link)
+  :require t)
+;; bullets
+;; (leaf org-bullets :straight t
+;;   :hook (org-mode-hook . org-bullets-mode))
+;; superstar 
+;;   :custom
+;;   ((org-superstar-headline-bullets-list . '("◉" "○" "✸" "✿"))
+;;    (org-superstar-leading-bullet . " "))
+(leaf org-superstar
+  :straight t
+  :hook ((org-mode-hook . org-superstar-mode)))
+;; tree-slide
+(leaf org-tree-slide
+  :straight t
+  :bind (("<f8>" . org-tree-slide-mode)
+         ("S-<f8>" . org-tree-slide-skip-done-toggle)))
+;; journal
+(leaf org-journal
+  :straight (org-journal :type git :host github
+			 :repo "bastibe/org-journal")
+  ;; :defer t
+  :custom
+  (org-journal-dir . "~/Documents/org/journal/")
+  ;; (org-journal-file-type 'yearly)
+  ;; (org-journal-date-format "%A, %d %B %Y")
+  (org-journal-enable-agenda-integration . t)
+  (org-icalendar-store-UID . t)
+  (org-icalendar-include-todo . "all")
+  (org-icalendar-combined-agenda-file . "~/Documents/org/ical.ics")
+  :config
+  ;; When =org-journal-file-pattern= has the default value, this would
+  ;; be the regex.
+  ;; (setq org-agenda-file-regexp
+  ;; 	"\\`\\\([^.].*\\.org\\\|[0-9]\\\{8\\\}\\\(\\.gpg\\\)?\\\)\\'")
+  ;; (add-to-list 'org-agenda-files org-journal-dir)
+  ;; (setq org-journal-enable-agenda-integration t
+  ;;       org-icalendar-store-UID t
+  ;;       org-icalendar-include-todo "all"
+  ;;       org-icalendar-combined-agenda-file "~/Documents/org/ical.ics")
+  )
+;;
+#+end_src
+
+** DONE poly-org
+org-mode の中で TeX の記述を簡略化するために，
+[[https://github.com/polymode/poly-org][polymode]] を導入．
+R なども使えるので取り敢えず便利．
+時々 mode の認識をミスして indent がずれるのが玉に瑕．
+
+#+begin_src emacs-lisp
+;;; poly-mode
+(leaf poly-org
+  :straight t 
+  :after org
+  :require t)
+#+end_src
+
+** DONE ox関連
+hugo と oer-reveal に対応させている．
+
+#+begin_src emacs-lisp
+;;; org-export (ox)
+;; hugo  
+(leaf ox-hugo
+  :straight t
+  :after org
+  :require t
+  )
+;; latex
+(leaf ox-latex
+  :straight nil
+  :after (org ox)
+  :custom
+  (org-latex-pdf-process . '("latexmk %f"))
+  (org-latex-prefer-user-labels . t)
+  ;; (org-latex-listings 'minted) ;; latexmkrc の設定が必要
+  :config
+  ;; (setq org-latex-pdf-process '("latexmk %f"))
+  ;; (setq org-latex-listings 'minted)
+  (add-to-list 'org-latex-classes
+	       '("scrartcl"
+		 "\\documentclass{scrartcl}
+                  [NO-DEFAULT-PACKAGES]"
+		 ("\\section{%s}" . "\\section*{%s}")
+		 ("\\subsection{%s}" . "\\subsection*{%s}")
+		 ("\\subsubsection{%s}" . "\\subsubsection*{%s}")
+		 ("\\paragraph{%s}" . "\\paragraph*{%s}")
+		 ("\\subparagraph{%s}" . "\\subparagraph*{%s}")))
+  (add-to-list 'org-latex-classes
+	       '("scrbook"
+		 "\\documentclass{scrbook}
+                  [NO-DEFAULT-PACKAGES]"
+		 ("\\part{%s}" . "\\part*{%s}")
+		 ("\\chapter{%s}" . "\\chapter*{%s}")
+		 ("\\section{%s}" . "\\section*{%s}")
+		 ("\\subsection{%s}" . "\\subsection*{%s}")
+		 ("\\subsubsection{%s}" . "\\subsubsection*{%s}")))
+  )
+;; emacs-reveal
+(leaf org-re-reveal
+  :straight (org-re-reveal :type git :host gitlab :repo "oer/org-re-reveal")
+  :after org
+  :require t)
+(leaf oer-reveal
+  :straight (oer-reveal :type git :host gitlab :repo "oer/oer-reveal")
+  :after (org org-re-reveal)
+  :require t oer-reveal-publish
+  )
+(leaf org-ref
+  :straight t
+  :after org
+  :require t
+  :bind
+  (("C-c e r" . org-ref-insert-link))
+  :custom
+  (org-ref-bibliography-notes . "~/lib/tex/bib/notes.org")
+  (org-ref-default-bibliography . '("~/lib/tex/bib/papers.bib"))
+  (org-ref-pdf-directory . "~/Documents/Mendeley Desktop")
+  )
+(leaf org-re-reveal-ref
+  :straight (org-re-reveal-ref :type git :host gitlab :repo "oer/org-re-reveal-ref")
+  :after (org org-ref)
+  :require t)
+;; pandoc
+(leaf ox-pandoc
+  :straight t
+  :after org
+  :require t
+  :custom
+  (org-pandoc-options . '((standalone . t)))
+  ;; cancel above settings only for 'docx' format
+  (org-pandoc-options-for-docx . '((standalone . nil)))
+  ;; special settings for beamer-pdf and latex-pdf exporters
+  (org-pandoc-options-for-beamer-pdf . '((pdf-engine . "latexmk")))
+  (org-pandoc-options-for-latex-pdf . '((pdf-engine . "latexmk")))
+  ;; special extensions for markdown_github output
+  (org-pandoc-format-extensions . '(markdown_github+pipe_tables+raw_html))
+  :config
+  ;; default options for all output formats
+  ;; (setq org-pandoc-options '((standalone . t)))
+  ;; ;; cancel above settings only for 'docx' format
+  ;; (setq org-pandoc-options-for-docx '((standalone . nil)))
+  ;; ;; special settings for beamer-pdf and latex-pdf exporters
+  ;; (setq org-pandoc-options-for-beamer-pdf '((pdf-engine . "latexmk")))
+  ;; (setq org-pandoc-options-for-latex-pdf '((pdf-engine . "latexmk")))
+  ;; ;; special extensions for markdown_github output
+  ;; (setq org-pandoc-format-extensions '(markdown_github+pipe_tables+raw_html))
+  )
+#+end_src
+
+** DONE org-roam
+HyperCard のように使うことを想定して
+とりあえず入れてみる．
+
+#+begin_src emacs-lisp
+;;;
+(leaf org-roam 
+  :straight t
+  :bind (("C-c n l" . org-roam-buffer-toggle)
+         ("C-c n f" . org-roam-node-find)
+         ("C-c n g" . org-roam-graph)
+         ("C-c n i" . org-roam-node-insert)
+         ("C-c n c" . org-roam-capture)
+         ;; Dailies
+         ("C-c n j" . org-roam-dailies-capture-today))
+  :init
+  (setq org-roam-v2-ack t) ; doesn't work for leaf
+  ;; :require org-roam-graph ; how to setup under leaf?
+  (leaf org-roam-graph
+    :load-path "~/.emacs.d/straight/repos/org-roam/extensions/"
+    :require t
+    :init
+    ;; (setq org-roam-graph-viewer "/usr/bin/open") 
+   ) 
+    (leaf org-roam-dailies
+    :load-path "~/.emacs.d/straight/repos/org-roam/extensions/"
+    :require t
+    )
+  ;; :require org-roam-protocol ; if using
+  :custom
+  (org-roam-directory . "~/Desktop/roam/")
+  (org-roam-graph-viewer . "/usr/bin/open") 
+  :config
+  (org-roam-db-autosync-mode))
+#+end_src
+
+#+begin_src emacs-lisp :tangle no
+;;;
+(use-package org-roam
+  :straight t
+  :init (setq org-roam-v2-ack t)
+  :custom
+  (org-roam-directory (file-truename "~/Desktop/roam/"))
+  :bind (("C-c n l" . org-roam-buffer-toggle)
+         ("C-c n f" . org-roam-node-find)
+         ("C-c n g" . org-roam-graph)
+         ("C-c n i" . org-roam-node-insert)
+         ("C-c n c" . org-roam-capture)
+         ;; Dailies
+         ("C-c n j" . org-roam-dailies-capture-today))
+  :config
+  (org-roam-db-autosync-mode)
+  ;; If using org-roam-protocol
+  ;; (require 'org-roam-protocol)
+  )
+#+end_src
+
+** DONE org-agenda のための hydra
+[[https://github.com/abo-abo/hydra/wiki/][hydra wiki]] の設定を利用．
+
+#+begin_src emacs-lisp
+;;; Hydra for org agenda (graciously taken from Spacemacs)
+(leaf *org-agenda-hydra
+  :config
+  (bind-key "C-c ." 'hydra-org-agenda/body)
+  (defhydra hydra-org-agenda (:pre (setq which-key-inhibit t)
+                                   :post (setq which-key-inhibit nil)
+                                   :hint none)
+    "
+Org agenda (_q_uit)
+
+^Clock^      ^Visit entry^              ^Date^             ^Other^
+^-----^----  ^-----------^------------  ^----^-----------  ^-----^---------
+_ci_ in      _SPC_ in other window      _ds_ schedule      _gr_ reload
+_co_ out     _TAB_ & go to location     _dd_ set deadline  _._  go to today
+_cq_ cancel  _RET_ & del other windows  _dt_ timestamp     _gd_ go to date
+_cj_ jump    _o_   link                 _+_  do later      ^^
+^^           ^^                         _-_  do earlier    ^^
+^^           ^^                         ^^                 ^^
+^View^          ^Filter^                 ^Headline^         ^Toggle mode^
+^----^--------  ^------^---------------  ^--------^-------  ^-----------^----
+_vd_ day        _ft_ by tag              _ht_ set status    _tf_ follow
+_vw_ week       _fr_ refine by tag       _hk_ kill          _tl_ log
+_vt_ fortnight  _fc_ by category         _hr_ refile        _ta_ archive trees
+_vm_ month      _fh_ by top headline     _hA_ archive       _tA_ archive files
+_vy_ year       _fx_ by regexp           _h:_ set tags      _tr_ clock report
+_vn_ next span  _fd_ delete all filters  _hp_ set priority  _td_ diaries
+_vp_ prev span  ^^                       ^^                 ^^
+_vr_ reset      ^^                       ^^                 ^^
+^^              ^^                       ^^                 ^^
+"
+    ;; Entry
+    ("hA" org-agenda-archive-default)
+    ("hk" org-agenda-kill)
+    ("hp" org-agenda-priority)
+    ("hr" org-agenda-refile)
+    ("h:" org-agenda-set-tags)
+    ("ht" org-agenda-todo)
+    ;; Visit entry
+    ("o"   link-hint-open-link :exit t)
+    ("<tab>" org-agenda-goto :exit t)
+    ("TAB" org-agenda-goto :exit t)
+    ("SPC" org-agenda-show-and-scroll-up)
+    ("RET" org-agenda-switch-to :exit t)
+    ;; Date
+    ("dt" org-agenda-date-prompt)
+    ("dd" org-agenda-deadline)
+    ("+" org-agenda-do-date-later)
+    ("-" org-agenda-do-date-earlier)
+    ("ds" org-agenda-schedule)
+    ;; View
+    ("vd" org-agenda-day-view)
+    ("vw" org-agenda-week-view)
+    ("vt" org-agenda-fortnight-view)
+    ("vm" org-agenda-month-view)
+    ("vy" org-agenda-year-view)
+    ("vn" org-agenda-later)
+    ("vp" org-agenda-earlier)
+    ("vr" org-agenda-reset-view)
+    ;; Toggle mode
+    ("ta" org-agenda-archives-mode)
+    ("tA" (org-agenda-archives-mode 'files))
+    ("tr" org-agenda-clockreport-mode)
+    ("tf" org-agenda-follow-mode)
+    ("tl" org-agenda-log-mode)
+    ("td" org-agenda-toggle-diary)
+    ;; Filter
+    ("fc" org-agenda-filter-by-category)
+    ("fx" org-agenda-filter-by-regexp)
+    ("ft" org-agenda-filter-by-tag)
+    ("fr" org-agenda-filter-by-tag-refine)
+    ("fh" org-agenda-filter-by-top-headline)
+    ("fd" org-agenda-filter-remove-all)
+    ;; Clock
+    ("cq" org-agenda-clock-cancel)
+    ("cj" org-agenda-clock-goto :exit t)
+    ("ci" org-agenda-clock-in :exit t)
+    ("co" org-agenda-clock-out)
+    ;; Other
+    ("q" nil :exit t)
+    ("gd" org-agenda-goto-date)
+    ("." org-agenda-goto-today)
+    ("gr" org-agenda-redo))
+  )
+#+end_src
+
+** DONE org-clock のための hydra
+[[https://github.com/abo-abo/hydra/wiki/][hydra wiki]] の設定を利用．
+
+#+begin_src emacs-lisp
+;;; org-clock
+(leaf *org-clock-hydra
+  :config
+  (bind-key "C-c w" 'hydra-org-clock/body)
+  (defhydra hydra-org-clock (:color blue :hint nil)
+    "
+^Clock:^ ^In/out^     ^Edit^   ^Summary^    | ^Timers:^ ^Run^           ^Insert
+-^-^-----^-^----------^-^------^-^----------|--^-^------^-^-------------^------
+(_?_)    _i_n         _e_dit   _g_oto entry | (_z_)     _r_elative      ti_m_e
+ ^ ^     _c_ontinue   _q_uit   _d_isplay    |  ^ ^      cou_n_tdown     i_t_em
+ ^ ^     _o_ut        ^ ^      _r_eport     |  ^ ^      _p_ause toggle
+ ^ ^     ^ ^          ^ ^      ^ ^          |  ^ ^      _s_top
+"
+    ("i" org-clock-in)
+    ("c" org-clock-in-last)
+    ("o" org-clock-out)
+    
+    ("e" org-clock-modify-effort-estimate)
+    ("q" org-clock-cancel)
+
+    ("g" org-clock-goto)
+    ("d" org-clock-display)
+    ("r" org-clock-report)
+    ("?" (org-info "Clocking commands"))
+
+    ("r" org-timer-start)
+    ("n" org-timer-set-timer)
+    ("p" org-timer-pause-or-continue)
+    ("s" org-timer-stop)
+
+    ("m" org-timer)
+    ("t" org-timer-item)
+    ("z" (org-info "Timers")))
+  )
+#+end_src
+
+
+* PDF関連
+** DONE PDF-Tools
+[[https://github.com/abo-abo/hydra/wiki/][hydra wiki]] の PDF-Tools の例を利用して，
+[[https://github.com/abo-abo/hydra][hydra]] で keybind を表示．
+
+#+begin_src emacs-lisp
+;; pdf-tools
+(leaf pdf-tools
+  :straight t
+  :bind (:pdf-view-mode-map
+	 ("." . hydra-pdftools/body)
+	 ("<s-spc>" .  pdf-view-scroll-down-or-next-page)
+	 ("g"  . pdf-view-first-page)
+	 ("G"  . pdf-view-last-page)
+	 ("l"  . image-forward-hscroll)
+	 ("h"  . image-backward-hscroll)
+	 ("j"  . pdf-view-next-page)
+	 ("k"  . pdf-view-previous-page)
+	 ("e"  . pdf-view-goto-page)
+	 ("u"  . pdf-view-revert-buffer)
+	 ("al" . pdf-annot-list-annotations)
+	 ("ad" . pdf-annot-delete)
+	 ("aa" . pdf-annot-attachment-dired)
+	 ("am" . pdf-annot-add-markup-annotation)
+	 ("at" . pdf-annot-add-text-annotation)
+	 ("y"  . pdf-view-kill-ring-save)
+	 ("i"  . pdf-misc-display-metadata)
+	 ("s"  . pdf-occur)
+	 ("b"  . pdf-view-set-slice-from-bounding-box)
+	 ("r"  . pdf-view-reset-slice))
+  :hydra
+  (hydra-pdftools
+   (:color blue :hint nil)
+   "
+
+    Move  History   Scale/Fit     Annotations  Search/Link    Do   │ PDF Tools │
+--------------------------------------------------------------------------------
+      ^^_g_^^      _B_    ^↧^    _+_    ^ ^     [_al_] list    [_s_] search    [_u_] revert buffer
+      ^^^↑^^^      ^↑^    _H_    ^↑^  ↦ _W_ ↤   [_am_] markup  [_o_] outline   [_i_] info
+      ^^_p_^^      ^ ^    ^↥^    _0_    ^ ^     [_at_] text    [_F_] link      [_d_] dark mode
+      ^^^↑^^^      ^↓^  ╭─^─^─┐  ^↓^  ╭─^ ^─┐   [_ad_] delete  [_f_] search link
+ _h_ ←pag_e_→ _l_  _N_  │ _P_ │  _-_    _b_     [_aa_] dired
+      ^^^↓^^^      ^ ^  ╰─^─^─╯  ^ ^  ╰─^ ^─╯   [_y_]  yank
+      ^^_n_^^      ^ ^  _r_eset slice box
+      ^^^↓^^^
+      ^^_G_^^
+--------------------------------------------------------------------------------
+"
+   ("<ESC>" nil "quit")
+   ("al" pdf-annot-list-annotations)
+   ("ad" pdf-annot-delete)
+   ("aa" pdf-annot-attachment-dired)
+   ("am" pdf-annot-add-markup-annotation)
+   ("at" pdf-annot-add-text-annotation)
+   ("y"  pdf-view-kill-ring-save)
+   ("+" pdf-view-enlarge :color red)
+   ("-" pdf-view-shrink :color red)
+   ("0" pdf-view-scale-reset)
+   ("H" pdf-view-fit-height-to-window)
+   ("W" pdf-view-fit-width-to-window)
+   ("P" pdf-view-fit-page-to-window)
+   ("n" pdf-view-next-page-command :color red)
+   ("p" pdf-view-previous-page-command :color red)
+   ("d" pdf-view-dark-minor-mode)
+   ("b" pdf-view-set-slice-from-bounding-box)
+   ("r" pdf-view-reset-slice)
+   ("g" pdf-view-first-page)
+   ("G" pdf-view-last-page)
+   ("e" pdf-view-goto-page)
+   ("o" pdf-outline)
+   ("s" pdf-occur)
+   ("i" pdf-misc-display-metadata)
+   ("u" pdf-view-revert-buffer)
+   ("F" pdf-links-action-perfom)
+   ("f" pdf-links-isearch-link)
+   ("B" pdf-history-backward :color red)
+   ("N" pdf-history-forward :color red)
+   ("l" image-forward-hscroll :color red)
+   ("h" image-backward-hscroll :color red))
+  :require t
+  :config
+  (pdf-tools-install)
+  (setq-default pdf-view-display-size 'fit-page))
+#+end_src
+
+
+* TODO 後始末
+
+こちらを参考[fn:3]
+にして custom.el の後始末．
+消しても良いが，時々回収するため．
+
+#+begin_src emacs-lisp
+;;; Custom file handling
+(setq custom-file "~/.emacs.d/custom.el")
+(when (not (file-exists-p custom-file))
+  (with-temp-buffer (write-file custom-file)))
+(load custom-file)
+#+end_src
+
+
+* Footnotes
+
+[fn:1] https://mtino1594.hatenablog.com/entry/2019/04/07/200000
+
+[fn:2] https://github.com/mahito1594/dotemacs
+
+[fn:3] https://github.com/whatyouhide/emacs.d/blob/master/init.el
+
+[fn:4] https://qiita.com/minoruGH/items/d644cb16d9aa8f8a32a6
+
+[fn:5] https://uwabami.github.io/cc-env/Emacs.html
+
+[fn:9] https://github.com/raxod502/straight.el
+
+[fn:8] http://github.com/elim/dotemacs/blob/master/init.el
+
+[fn:7] https://bitbucket.org/sakito/dot.emacs.d/
+
+[fn:6] https://nukosuke.hatenablog.jp/entry/straight-el
+
+* COMMENT Local Variables
+
+# time-stamp-line-limit: 1000
+# time-stamp-format: "%04y.%02m.%02d %02H:%02M:%02S"
+# time-stamp-active: t
+# time-stamp-start: "#\\+DATE:[ \t]*"
+# time-stamp-end: "$"
+# org-src-preserve-indentation: t
+# org-edit-src-content-indentation: 0
+
+# Local Variables:
+# indent-tabs-mode: nil
+# org-src-preserve-indentation: t
+# End:
+
+
+
