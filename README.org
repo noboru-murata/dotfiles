@@ -2,6 +2,7 @@
 
 * DONE init.org
   package は straight.el で管理
+  leaf に書き換え
 
-* TODO zsh.org
-  いずれ書く
+* DONE zsh.org
+  取り敢えず書いた
