@@ -1,0 +1,548 @@
+#+TITLE: init files for zshell
+#+AUTHOR: Noboru Murata
+#+EMAIL: noboru.murata@gmail.com
+#+DATE: Time-stamp: <2023-02-25 16:38:30 mura>
+#+STARTUP: hidestars content indent
+#+OPTIONS: date:t H:4 num:nil toc:nil \n:nil
+#+OPTIONS: @:t ::t |:t ^:t -:t f:t *:t TeX:t LaTeX:t 
+#+OPTIONS: skip:nil d:nil todo:t pri:nil tags:not-in-toc
+
+* zshenv
+** 整理済み
+#+begin_src zsh :tangle "~/etc/zshenv"
+# zshenv file for zsh 4.0
+#
+# .zshenv is sourced on all invocations of the
+# shell, unless the -f option is set.  It should
+# contain commands to set the command search path,
+# plus other important environment variables.
+# .zshenv should not contain commands that product
+# output or assume the shell is attached to a tty.
+
+path=( ~/bin 
+	/Library/Frameworks/R.framework/Resources/bin
+	/Library/TeX/texbin 
+	/opt/homebrew/bin(N-/) 
+	/usr/local/bin(N-/) 
+	/opt/X11R6/bin 
+        /usr/bin 
+	/bin 
+        /sbin 
+	/usr/sbin 
+	/usr/local/sbin 
+)
+
+export PYTHONPATH="/usr/local/opt/bzr-fastimport/libexec/vendor/lib/python2.7/site-packages:$PYTHONPATH"
+export JLESSCHARSET=japanese-euc
+export LESS_ADVANCED_PREPROCESSOR="1"
+export LESSOPEN='|/usr/local/bin/lesspipe.sh "%s"'
+export LESSCOLORIZER="/usr/local/bin/pygmentize"
+export GIT_PAGER="lv -c"
+export TEXINPUTS=.:$HOME/lib/tex/inputs//:
+export TEXFONTS=.:$HOME/Library/Fonts:
+export BIBINPUTS=.:$HOME/lib/tex/bib:
+#+end_src
+
+** 古いもの
+#+begin_src zsh :tangle no
+# $Id: zshenv,v 1.10 2003/12/31 05:42:32 mura Exp $
+# .zshenv file for zsh 4.0
+#
+# .zshenv is sourced on all invocations of the
+# shell, unless the -f option is set.  It should
+# contain commands to set the command search path,
+# plus other important environment variables.
+# .zshenv should not contain commands that product
+# output or assume the shell is attached to a tty.
+#
+
+path=( ~/bin 
+	/Library/Frameworks/R.framework/Resources/bin
+	/Library/TeX/texbin 
+	/opt/homebrew/bin(N-/) 
+	/usr/local/bin(N-/) 
+	/opt/X11R6/bin 
+        /usr/bin 
+	/bin 
+        /sbin 
+	/usr/sbin 
+	/usr/local/sbin 
+)
+#	/usr/local/texlive/p2009/bin/x86_64-apple-darwin10.4.0 \
+#	/usr/local/texlive/2009/bin/universal-darwin \
+#        /usr/local/bin \
+
+export PYTHONPATH="/usr/local/opt/bzr-fastimport/libexec/vendor/lib/python2.7/site-packages:$PYTHONPATH"
+export JLESSCHARSET=japanese-euc
+# export LESS="-j10 -R --no-init --quit-if-one-screen"
+# export LESSCHARSET="utf-8"
+export LESS_ADVANCED_PREPROCESSOR="1"
+export LESSOPEN='|/usr/local/bin/lesspipe.sh "%s"'
+export LESSCOLORIZER="/usr/local/bin/pygmentize"
+#export PAGER='/usr/local/bin/less -i'
+export GIT_PAGER="lv -c"
+#export EDITOR='vi'
+#export JTEXTYPE=ASCII
+export TEXINPUTS=.:$HOME/lib/tex/inputs//:
+#export TEXINPUTS=.:$HOME/lib/tex/inputs//:/usr/local/share/latex2html/texinputs:
+#export BIBINPUTS=.:$HOME/Work/bibliography:
+export TEXFONTS=.:$HOME/Library/Fonts:
+#export TEXFONTS=.:/System/Library/AssetsV2//:$HOME/Library/Fonts:
+export BIBINPUTS=.:$HOME/lib/tex/bib:
+#export TEXFONTMAPS=.:$HOME/lib/tex/inputs:
+#export OPENWINHOME=/usr/openwin
+#export VSHOME=/usr/view
+#export LD_LIBRARY_PATH=$HOME/UNIX/lib:/usr/lib:/usr/local/lib:/usr/shlib
+#export MANPATH=$HOME/UNIX/man:/usr/man:/usr/local/man:/usr/dt/man
+#export LANG=ja_JP.euc
+#export LANG=ja_JP.jis8
+#export LANG=ja_JP.EUC
+#export LANG=ja
+#export LANG=C
+#export PERL_BADLANG=0
+#export XMODIFIERS="@im=_XWNMO"
+#export XMODIFIERS="@im=skkinput"
+#export PRINTER=dup
+#export CVSROOT=$HOME/Project/CVSROOT
+#export DISPLAY=:0.0
+#case `uname` in
+#Darwin)
+#	export DISPLAY=:0.0
+#	;;
+#esac
+
+#case `uname -n` in
+#[^d][^h][^c][^p]*.murata.elec.waseda.ac.jp)
+#	CVSROOT=$HOME/cvsroot
+#	export CVSROOT
+#	;;
+#dhcp*.murata.elec.waseda.ac.jp)
+#	CVSROOT=mura@home.murata.elec.waseda.ac.jp:/home/lab/mura/cvsroot
+#	export CVSROOT
+#	CVS_RSH=ssh
+#	export CVS_RSH
+#	;;
+#*)
+#	CVSROOT=mura@www.murata.elec.waseda.ac.jp:/home/lab/mura/cvsroot
+#	export CVSROOT
+#	CVS_RSH=ssh
+#	export CVS_RSH
+#	;;
+#esac
+#+end_src
+
+* zprofile
+** 整理済み
+#+begin_src zsh :tangle "~/etc/zprofile"
+# zprofile file for zsh 4.0
+
+eval $(/opt/homebrew/bin/brew shellenv)
+#+end_src
+
+** 古いもの
+#+begin_src zsh :tangle no
+eval $(/opt/homebrew/bin/brew shellenv)
+#+end_src
+
+* zshrc
+** 整理済み
+#+begin_src zsh :tangle "~/etc/zshrc"
+# zshrc file for zsh 4.0
+#
+# .zshrc is sourced in interactive shells.  It
+# should contain commands to set up aliases, functions,
+# options, key bindings, etc.
+#
+
+# THIS FILE IS NOT INTENDED TO BE USED AS /etc/zshrc, NOR WITHOUT EDITING
+#return 0	# Remove this line after editing this file as appropriate
+
+# Search path for the cd command
+cdpath=(~ ~/Desktop/works ~/Desktop/notes ~/Desktop/lectures ~/Desktop \
+	~/Documents/Projects ~/Documents/Bibliotheque ..)
+
+# Use hard limits, except for a smaller stack and no core dumps
+unlimit
+limit stack 8192
+limit core 0
+limit -s
+
+umask 022
+
+# Set up aliases
+alias mv='nocorrect mv'       # no spelling correction on mv
+alias cp='nocorrect cp'       # no spelling correction on cp
+alias mkdir='nocorrect mkdir' # no spelling correction on mkdir
+alias j=jobs
+alias pu=pushd
+alias po=popd
+alias d='dirs -v'
+alias h=history
+alias ll='ls -l'
+alias la='ls -a'
+
+alias icls='find . -type f -name "*.icloud" -print'
+alias icdl='find . -type f -name "*.icloud" -exec brctl download {} \;'
+
+# List only directories and symbolic
+# links that point to directories
+alias lsd='ls -ld *(-/DN)'
+
+# List only file beginning with "."
+alias lsa='ls -ld .*'
+
+### 
+alias uless='LESSCHARSET=japanase-ujis less'
+alias latexrm='find . -not -name "*.tex" -type f -maxdepth 1' 
+alias texclean='rm *.(dvi|aux|log|blg|toc|tex~)'
+alias luajitlatex='luajittex --fmt=luajitlatex.fmt'
+if [ x$TERM = xkterm -o x$TERM = xxterm ]; then
+	alias cd=cwdcmd
+	function cwdcmd () {
+		builtin cd $*
+		CWD=`builtin pwd | sed -e 's/^.*\/home\/lab\/mura/\~/'`
+		HOSTNAMESHORT=`uname -n`
+		echo -n "]2;$HOST:$CWD]1;$HOSTNAMESHORT"
+	}
+fi
+
+# Shell functions
+setenv() { typeset -x "${1}${1:+=}${(@)argv[2,$#]}" }  # csh compatibility
+freload() { while (( $# )); do; unfunction $1; autoload -U $1; shift; done }
+
+# Where to look for autoloaded function definitions
+fpath=(/opt/homebrew/share/zsh/site-functions $fpath)
+
+# Autoload all shell functions from all directories in $fpath (following
+# symlinks) that have the executable bit on (the executable bit is not
+# necessary, but gives you an easy way to stop the autoloading of a
+# particular shell function). $fpath should not be empty for this to work.
+for func in $^fpath/*(N-.x:t); autoload $func
+
+# automatically remove duplicates from these arrays
+typeset -U path cdpath fpath manpath
+
+# Global aliases -- These do not have to be
+# at the beginning of the command line.
+alias -g M='|more'
+alias -g H='|head'
+alias -g T='|tail'
+
+#manpath=($HOME/man /usr/share/man /usr/share/perl/man \
+#	/usr/local/man /usr/X11R6/man \
+#	/usr/local/lib/perl5/5.6.0/man)
+#export MANPATH
+
+# Hosts to use for completion (see later zstyle)
+hosts=(`hostname` localhost \
+	juventas mercurius neptunus quirinus \
+	cupido caelus caca cacus camena cardea carna \
+	mania misericordia mors \
+	ns.eb.waseda.ac.jp \
+	murata.eb.waseda.ac.jp \
+	ftp.waseda.ac.jp ftp.jp.freebsd.org)
+
+# Set prompts
+PROMPT='%n@%m[%h]%.> '    # default prompt
+RPROMPT=' %T'     # prompt for right side of screen
+
+# Some environment variables
+export MAIL=/var/spool/mail/$USERNAME
+export LESS=-cex3M
+#export HELPDIR=/usr/local/lib/zsh/help  # directory for run-help function to find docs
+
+MAILCHECK=300
+HISTSIZE=1000
+DIRSTACKSIZE=50
+
+#SAVEHIST=1000
+#HISTFILE=$HOME/.zhistory
+setopt inc_append_history
+setopt share_history
+
+# Watch for my friends
+watch=(notme)                   # watch for everybody but me
+LOGCHECK=300                    # check every 5 min for login/logout activity
+WATCHFMT='%n %a %l from %m at %t.'
+
+# Set/unset  shell options
+setopt   notify globdots pushdtohome cdablevars autolist automenu
+setopt   autocd recexact longlistjobs 
+setopt   autoresume histignoredups pushdsilent histallowclobber
+setopt   autopushd pushdminus extendedglob rcquotes mailwarning
+unsetopt bgnice autoparamslash hup
+
+# Autoload zsh modules when they are referenced
+zmodload -a zsh/stat stat
+zmodload -a zsh/zpty zpty
+zmodload -a zsh/zprof zprof
+zmodload -ap zsh/mapfile mapfile
+
+# Some nice key bindings
+bindkey -e                 # emacs key bindings
+bindkey ' ' magic-space    # also do history expansion on space
+bindkey '^I' complete-word # complete on tab, leave expansion to _expand
+
+# Setup new style completion system. To see examples of the old style (compctl
+# based) programmable completion, check Misc/compctl-examples in the zsh
+# distribution.
+autoload -U compinit
+compinit -u
+
+# Completion Styles
+
+# list of completers to use
+zstyle ':completion:*::::' completer _expand _complete _ignored _approximate
+
+# allow one error for every three characters typed in approximate completer
+zstyle -e ':completion:*:approximate:*' max-errors \
+    'reply=( $(( ($#PREFIX+$#SUFFIX)/3 )) numeric )'
+    
+# insert all expansions for expand completer
+zstyle ':completion:*:expand:*' tag-order all-expansions
+
+# formatting and messages
+zstyle ':completion:*' verbose yes
+zstyle ':completion:*:descriptions' format '%B%d%b'
+zstyle ':completion:*:messages' format '%d'
+zstyle ':completion:*:warnings' format 'No matches for: %d'
+zstyle ':completion:*:corrections' format '%B%d (errors: %e)%b'
+zstyle ':completion:*' group-name ''
+
+# match uppercase from lowercase
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
+
+# offer indexes before parameters in subscripts
+zstyle ':completion:*:*:-subscript-:*' tag-order indexes parameters
+
+# command for process lists, the local web server details and host completion
+zstyle '*' hosts $hosts
+
+# Filename suffixes to ignore during completion (except after rm command)
+zstyle ':completion:*:*:(^rm):*:*files' ignored-patterns '*?.o' '*?.c~' \
+    '*?.old' '*?.pro'
+# the same for old style completion
+#fignore=(.o .c~ .old .pro)
+
+# ignore completion functions (until the _ignored completer)
+zstyle ':completion:*:functions' ignored-patterns '_*'
+#+end_src
+
+** 古いもの
+
+#+begin_src zsh :tangle no
+# $Id: zshrc,v 1.3 2003/10/19 14:20:48 mura Exp $
+# .zshrc file for zsh 4.0
+#
+# .zshrc is sourced in interactive shells.  It
+# should contain commands to set up aliases, functions,
+# options, key bindings, etc.
+#
+
+# THIS FILE IS NOT INTENDED TO BE USED AS /etc/zshrc, NOR WITHOUT EDITING
+#return 0	# Remove this line after editing this file as appropriate
+
+# Search path for the cd command
+cdpath=(~ ~/Desktop/works ~/Desktop/notes ~/Desktop/lectures ~/Desktop \
+	~/Documents/Projects ~/Documents/Bibliotheque ..)
+
+# Use hard limits, except for a smaller stack and no core dumps
+unlimit
+limit stack 8192
+limit core 0
+limit -s
+
+umask 022
+
+# Set up aliases
+alias mv='nocorrect mv'       # no spelling correction on mv
+alias cp='nocorrect cp'       # no spelling correction on cp
+alias mkdir='nocorrect mkdir' # no spelling correction on mkdir
+alias j=jobs
+alias pu=pushd
+alias po=popd
+alias d='dirs -v'
+alias h=history
+#alias grep=egrep
+alias ll='ls -l'
+alias la='ls -a'
+
+alias icls='find . -type f -name "*.icloud" -print'
+alias icdl='find . -type f -name "*.icloud" -exec brctl download {} \;'
+
+# List only directories and symbolic
+# links that point to directories
+alias lsd='ls -ld *(-/DN)'
+
+# List only file beginning with "."
+alias lsa='ls -ld .*'
+
+### 
+alias uless='LESSCHARSET=japanase-ujis less'
+alias latexrm='find . -not -name "*.tex" -type f -maxdepth 1' 
+alias texclean='rm *.(dvi|aux|log|blg|toc|tex~)'
+#alias texclean='rm *.[^t][^e][^x]*'
+alias luajitlatex='luajittex --fmt=luajitlatex.fmt'
+if [ x$TERM = xkterm -o x$TERM = xxterm ]; then
+	alias cd=cwdcmd
+	function cwdcmd () {
+		builtin cd $*
+		CWD=`builtin pwd | sed -e 's/^.*\/home\/lab\/mura/\~/'`
+		HOSTNAMESHORT=`uname -n`
+		echo -n "]2;$HOST:$CWD]1;$HOSTNAMESHORT"
+	}
+fi
+
+# Shell functions
+setenv() { typeset -x "${1}${1:+=}${(@)argv[2,$#]}" }  # csh compatibility
+freload() { while (( $# )); do; unfunction $1; autoload -U $1; shift; done }
+
+# Where to look for autoloaded function definitions
+#fpath=($fpath ~/.zfunc)
+fpath=(/opt/homebrew/share/zsh/site-functions $fpath)
+
+# Autoload all shell functions from all directories in $fpath (following
+# symlinks) that have the executable bit on (the executable bit is not
+# necessary, but gives you an easy way to stop the autoloading of a
+# particular shell function). $fpath should not be empty for this to work.
+for func in $^fpath/*(N-.x:t); autoload $func
+
+# automatically remove duplicates from these arrays
+typeset -U path cdpath fpath manpath
+
+# Global aliases -- These do not have to be
+# at the beginning of the command line.
+alias -g M='|more'
+alias -g H='|head'
+alias -g T='|tail'
+
+#manpath=($HOME/man /usr/share/man /usr/share/perl/man \
+#	/usr/local/man /usr/X11R6/man \
+#	/usr/local/lib/perl5/5.6.0/man)
+#export MANPATH
+
+# Hosts to use for completion (see later zstyle)
+hosts=(`hostname` localhost \
+	juventas mercurius neptunus quirinus \
+	cupido caelus caca cacus camena cardea carna \
+	mania misericordia mors \
+	ns.eb.waseda.ac.jp \
+	murata.eb.waseda.ac.jp \
+	ftp.waseda.ac.jp ftp.jp.freebsd.org)
+
+# Set prompts
+#PROMPT='%m%# '    # default prompt
+PROMPT='%n@%m[%h]%.> '    # default prompt
+#RPROMPT=' %~'     # prompt for right side of screen
+RPROMPT=' %T'     # prompt for right side of screen
+
+# Some environment variables
+export MAIL=/var/spool/mail/$USERNAME
+export LESS=-cex3M
+#export HELPDIR=/usr/local/lib/zsh/help  # directory for run-help function to find docs
+
+MAILCHECK=300
+HISTSIZE=1000
+DIRSTACKSIZE=50
+
+#SAVEHIST=1000
+#HISTFILE=$HOME/.zhistory
+setopt inc_append_history
+setopt share_history
+
+
+# Watch for my friends
+#watch=( $(<~/.friends) )       # watch for people in .friends file
+watch=(notme)                   # watch for everybody but me
+LOGCHECK=300                    # check every 5 min for login/logout activity
+WATCHFMT='%n %a %l from %m at %t.'
+
+# Set/unset  shell options
+#setopt   notify globdots correct pushdtohome cdablevars autolist
+#setopt   correctall autocd recexact longlistjobs
+#setopt   autoresume histignoredups pushdsilent noclobber
+#setopt   autopushd pushdminus extendedglob rcquotes mailwarning
+#unsetopt bgnice autoparamslash
+setopt   notify globdots pushdtohome cdablevars autolist automenu
+setopt   autocd recexact longlistjobs 
+setopt   autoresume histignoredups pushdsilent histallowclobber
+setopt   autopushd pushdminus extendedglob rcquotes mailwarning
+unsetopt bgnice autoparamslash hup
+
+# Autoload zsh modules when they are referenced
+zmodload -a zsh/stat stat
+zmodload -a zsh/zpty zpty
+zmodload -a zsh/zprof zprof
+zmodload -ap zsh/mapfile mapfile
+
+# Some nice key bindings
+#bindkey '^X^Z' universal-argument ' ' magic-space
+#bindkey '^X^A' vi-find-prev-char-skip
+#bindkey '^Xa' _expand_alias
+#bindkey '^Z' accept-and-hold
+#bindkey -s '\M-/' \\\\
+#bindkey -s '\M-=' \|
+
+# bindkey -v               # vi key bindings
+
+bindkey -e                 # emacs key bindings
+bindkey ' ' magic-space    # also do history expansion on space
+bindkey '^I' complete-word # complete on tab, leave expansion to _expand
+
+# Setup new style completion system. To see examples of the old style (compctl
+# based) programmable completion, check Misc/compctl-examples in the zsh
+# distribution.
+autoload -U compinit
+compinit -u
+
+# Completion Styles
+
+# list of completers to use
+zstyle ':completion:*::::' completer _expand _complete _ignored _approximate
+
+# allow one error for every three characters typed in approximate completer
+zstyle -e ':completion:*:approximate:*' max-errors \
+    'reply=( $(( ($#PREFIX+$#SUFFIX)/3 )) numeric )'
+    
+# insert all expansions for expand completer
+zstyle ':completion:*:expand:*' tag-order all-expansions
+
+# formatting and messages
+zstyle ':completion:*' verbose yes
+zstyle ':completion:*:descriptions' format '%B%d%b'
+zstyle ':completion:*:messages' format '%d'
+zstyle ':completion:*:warnings' format 'No matches for: %d'
+zstyle ':completion:*:corrections' format '%B%d (errors: %e)%b'
+zstyle ':completion:*' group-name ''
+
+# match uppercase from lowercase
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
+
+# offer indexes before parameters in subscripts
+zstyle ':completion:*:*:-subscript-:*' tag-order indexes parameters
+
+# command for process lists, the local web server details and host completion
+#zstyle ':completion:*:processes' command 'ps -o pid,s,nice,stime,args'
+#zstyle ':completion:*:urls' local 'www' '/var/www/htdocs' 'public_html'
+zstyle '*' hosts $hosts
+
+# Filename suffixes to ignore during completion (except after rm command)
+zstyle ':completion:*:*:(^rm):*:*files' ignored-patterns '*?.o' '*?.c~' \
+    '*?.old' '*?.pro'
+# the same for old style completion
+#fignore=(.o .c~ .old .pro)
+
+# ignore completion functions (until the _ignored completer)
+zstyle ':completion:*:functions' ignored-patterns '_*'
+
+#export PERL_LOCAL_LIB_ROOT="/Users/mura/lib/perl5:$PERL_LOCAL_LIB_ROOT";
+#export PERL_MB_OPT="--install_base "/Users/mura/lib/perl5"";
+#export PERL_MM_OPT="INSTALL_BASE=/Users/mura/lib/perl5";
+#export PERL5LIB="/Users/mura/lib/perl5/lib/perl5:$PERL5LIB";
+#export PATH="/Users/mura/lib/perl5/bin:$PATH";
+
+#+end_src
+
+* COMMENT Local Variables
+# Local Variables:
+# End:

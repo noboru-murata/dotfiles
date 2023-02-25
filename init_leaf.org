@@ -1,8 +1,8 @@
 #+TITLE: init file for emacs
 #+AUTHOR: Noboru Murata
 #+EMAIL: noboru.murata@gmail.com
-#+DATE: Time-stamp: <2021-09-03 11:24:39 mura>
-#+STARTUP: hidestars content
+#+DATE: Time-stamp: <2022-12-08 14:09:23 mura>
+#+STARTUP: hidestars content indent
 #+OPTIONS: date:t H:4 num:nil toc:nil \n:nil
 #+OPTIONS: @:t ::t |:t ^:t -:t f:t *:t TeX:t LaTeX:t 
 #+OPTIONS: skip:nil d:nil todo:t pri:nil tags:not-in-toc
@@ -105,12 +105,8 @@ package の依存関係は [[https://github.com/raxod502/straight.el][straight.e
 そろそろ古いものは気にしなくてもよいかもしれない．
 [[https://github.com/conao3/leaf.el][leaf.el]] には Emacs の version に関する関数は用意されている．
 
-#+begin_src emacs-lisp
-;;; for various environments
-;; if user-emacs-directory is not defined (before Emacs 22)
-(unless (boundp 'user-emacs-directory)
-  (defvar user-emacs-directory (expand-file-name "~/.emacs.d/")))
-;; functions for get environments
+#+begin_src emacs-lisp :tangle no
+;; functions for get environments (古い)
 (defun x->bool (elt) (not (not elt)))
 (defvar emacs22-p (equal emacs-major-version 22))
 (defvar emacs23-p (equal emacs-major-version 23))
@@ -118,10 +114,38 @@ package の依存関係は [[https://github.com/raxod502/straight.el][straight.e
 (defvar emacs25-p (equal emacs-major-version 25))
 (defvar emacs26-p (equal emacs-major-version 26))
 (defvar emacs27-p (equal emacs-major-version 27))
+(defvar emacs28-p (equal emacs-major-version 28))
 (defvar darwin-p (eq system-type 'darwin))
 (defvar ns-p (featurep 'ns))
 (defvar carbon-p (and (eq window-system 'mac) emacs22-p))
 (defvar mac-p (and (eq window-system 'mac) (or emacs23-p emacs24-p emacs25-p emacs26-p emacs27-p)))
+(defvar linux-p (eq system-type 'gnu/linux))
+(defvar colinux-p (when linux-p
+                    (let ((file "/proc/modules"))
+                      (and
+                       (file-readable-p file)
+                       (x->bool
+                        (with-temp-buffer
+                          (insert-file-contents file)
+                          (goto-char (point-min))
+                          (re-search-forward "^cofuse\.+" nil t)))))))
+(defvar cygwin-p (eq system-type 'cygwin))
+(defvar nt-p (eq system-type 'windows-nt))
+(defvar meadow-p (featurep 'meadow))
+(defvar windows-p (or cygwin-p nt-p meadow-p))
+#+end_src
+
+#+begin_src emacs-lisp
+;;; for various environments
+;; if user-emacs-directory is not defined (before Emacs 22)
+(unless (boundp 'user-emacs-directory)
+  (defvar user-emacs-directory (expand-file-name "~/.emacs.d/")))
+;; functions for get environments
+(defun x->bool (elt) (not (not elt)))
+(defvar darwin-p (eq system-type 'darwin))
+(defvar ns-p (featurep 'ns))
+(defvar carbon-p (and (eq window-system 'mac) (eq emacs-major-version 22)))
+(defvar mac-p (and (eq window-system 'mac) (>= emacs-major-version 23)))
 (defvar linux-p (eq system-type 'gnu/linux))
 (defvar colinux-p (when linux-p
                     (let ((file "/proc/modules"))
@@ -166,6 +190,9 @@ package の依存関係は [[https://github.com/raxod502/straight.el][straight.e
 (setenv "LC_ALL" "ja_JP.UTF-8")
 (setq system-time-locale "C")
 #+end_src
+
+以下を入れるかは検討が必要
+(setenv "R_HOME" "/Library/Frameworks/R.framework/Resources")
 
 ** DONE 文字コード
 基本は utf-8 で設定．
@@ -230,6 +257,14 @@ macOS は若干癖がある．
   ;; :config
   ;;  (beacon-color . "violet")
   :hook (after-init-hook . beacon-mode))
+(leaf atomic-chrome
+  :straight t
+  :init
+  (atomic-chrome-start-server)
+  :custom
+  (atomic-chrome-default-major-mode . 'org-mode)
+  (atomic-chrome-url-major-mode-alist . '(("overleaf\\.com" . tex-mode)))
+)
 #+end_src
 
 ** TODO キーバインド
@@ -327,6 +362,7 @@ _a_: open in        _S_: symlink
   :custom
   (dired-omit-files . "^\\.?#\\|^\\.$\\|^\\.\\.$\\|^\\..+$")
   (dired-bind-jump . nil)
+  (dired-guess-shell-alist-user . '(("\\.pdf\\'" "open")))
   :config
   (define-key dired-mode-map "." 'hydra-dired/body))
 ;; use all the icons for dired
@@ -367,18 +403,19 @@ _a_: open in        _S_: symlink
   (savehist-mode)
   )
 ;; consult
-(leaf consult
+(leaf consult ;; use example configuration for Consult
   :straight t
   :bind (;; C-c bindings (mode-specific-map)
          ("C-c h" . consult-history)
          ("C-c m" . consult-mode-command)
-         ("C-c b" . consult-bookmark)
          ("C-c k" . consult-kmacro)
          ;; C-x bindings (ctl-x-map)
          ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
          ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
          ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
          ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+         ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
+         ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
          ;; Custom M-# bindings for fast register access
          ("M-#" . consult-register-load)
          ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
@@ -397,8 +434,8 @@ _a_: open in        _S_: symlink
          ("M-g i" . consult-imenu)
          ("M-g I" . consult-imenu-multi)
          ;; M-s bindings (search-map)
-         ("M-s f" . consult-find)
-         ("M-s F" . consult-locate)
+         ("M-s d" . consult-find)
+         ("M-s D" . consult-locate)
          ("M-s g" . consult-grep)
          ("M-s G" . consult-git-grep)
          ("M-s r" . consult-ripgrep)
@@ -408,33 +445,81 @@ _a_: open in        _S_: symlink
          ("M-s k" . consult-keep-lines)
          ("M-s u" . consult-focus-lines)
          ;; Isearch integration
-         ("M-s e" . consult-isearch)
+         ("M-s e" . consult-isearch-history)
          (isearch-mode-map
-          ("M-e" . consult-isearch)                 ;; orig. isearch-edit-string
-          ("M-s e" . consult-isearch)               ;; orig. isearch-edit-string
+          ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
+          ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
           ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
-          ("M-s L" . consult-line-multi)))          ;; needed by consult-line to detect isearch
-  :hook (completion-list-mode-hook . consult-preview-at-point-mode)
+          ("M-s L" . consult-line-multi))            ;; needed by consult-line to detect isearch
+         ;; Minibuffer history
+         (minibuffer-local-map
+          ("M-s" . consult-history)                 ;; orig. next-matching-history-element
+          ("M-r" . consult-history)))                ;; orig. previous-matching-history-element
+	 
+  ;; Enable automatic preview at point in the *Completions* buffer. This is
+  ;; relevant when you use the default completion UI.
+  :hook (completion-list-mode . consult-preview-at-point-mode)
+
+  ;; The :init configuration is always executed (Not lazy)
   :init
-  (setq register-preview-delay 0
+
+  ;; Optionally configure the register formatting. This improves the register
+  ;; preview for `consult-register', `consult-register-load',
+  ;; `consult-register-store' and the Emacs built-ins.
+  (setq register-preview-delay 0.5
         register-preview-function #'consult-register-format)
+
+  ;; Optionally tweak the register preview window.
+  ;; This adds thin lines, sorting and hides the mode line of the window.
   (advice-add #'register-preview :override #'consult-register-window)
-  (advice-add #'completing-read-multiple :override #'consult-completing-read-multiple)
+
+  ;; Optionally replace `completing-read-multiple' with an enhanced version.
+  ;;  (advice-add #'completing-read-multiple :override #'consult-completing-read-multiple)
+
+  ;; Use Consult to select xref locations with preview
   (setq xref-show-xrefs-function #'consult-xref
         xref-show-definitions-function #'consult-xref)
+
+  ;; Configure other variables and modes in the :config section,
+  ;; after lazily loading the package.
   :config
+
+  ;; Optionally configure preview. The default value
+  ;; is 'any, such that any key triggers the preview.
+  ;; (setq consult-preview-key 'any)
+  ;; (setq consult-preview-key (kbd "M-."))
+  ;; (setq consult-preview-key (list (kbd "<S-down>") (kbd "<S-up>")))
+  ;; For some commands and buffer sources it is useful to configure the
+  ;; :preview-key on a per-command basis using the `consult-customize' macro.
   (consult-customize
    consult-theme
    :preview-key '(:debounce 0.2 any)
    consult-ripgrep consult-git-grep consult-grep
    consult-bookmark consult-recent-file consult-xref
-   consult--source-file consult--source-project-file consult--source-bookmark
+   consult--source-bookmark consult--source-recent-file
+   consult--source-project-recent-file
    :preview-key (kbd "M-."))
+
+  ;; Optionally configure the narrowing key.
+  ;; Both < and C-+ work reasonably well.
   (setq consult-narrow-key "<") ;; (kbd "C-+")
-  (setq consult-project-root-function
-        (lambda ()
-          (when-let (project (project-current))
-            (car (project-roots project)))))
+
+  ;; Optionally make narrowing help available in the minibuffer.
+  ;; You may want to use `embark-prefix-help-command' or which-key instead.
+  ;; (define-key consult-narrow-map (vconcat consult-narrow-key "?") #'consult-narrow-help)
+
+  ;; By default `consult-project-function' uses `project-root' from project.el.
+  ;; Optionally configure a different project root function.
+  ;; There are multiple reasonable alternatives to chose from.
+  ;;;; 1. project.el (the default)
+  ;; (setq consult-project-function #'consult--default-project--function)
+  ;;;; 2. projectile.el (projectile-project-root)
+  ;; (autoload 'projectile-project-root "projectile")
+  ;; (setq consult-project-function (lambda (_) (projectile-project-root)))
+  ;;;; 3. vc.el (vc-root-dir)
+  ;; (setq consult-project-function (lambda (_) (vc-root-dir)))
+  ;;;; 4. locate-dominating-file
+  ;; (setq consult-project-function (lambda (_) (locate-dominating-file "." ".git")))
   )
 ;; marginalia
 (leaf marginalia
@@ -997,6 +1082,25 @@ CUI でない場合は最大化 (fullscreen)．
   (toggle-fullscreen))
 #+end_src
 
+** TODO Perspective
+workspaceの機能を使う (C-x x) 
+[[https://github.com/nex3/perspective-el]]
+#+begin_src emacs-lisp
+;;; perspective
+(leaf perspective
+  :straight t
+  :bind
+  ("C-x C-b" . persp-list-buffers) ; or use a nicer switcher, see below
+  ;; ("C-c C-s" . persp-switch) ; previous keybind was C-x x s
+  :custom
+  `((persp-mode-prefix-key . ,(kbd "C-c C-p")) 
+    ;; (persp-suppress-no-prefix-key-warning . t)
+    )
+  :init
+  (persp-mode)
+  )
+#+end_src
+
 
 * 言語関係
 ** DONE 日本語入力
@@ -1180,6 +1284,7 @@ api-url は変更があるようなので注意．
   :config
   (leaf auctex-latexmk
     :straight t
+    :after auctex
     :config
     (auctex-latexmk-setup))
   ;; (setq TeX-view-program-list '(("DVIviewer" "dviout %o")
@@ -1438,12 +1543,14 @@ bibtexとebib/ref-texの連携を整理した方がよい．
 "C-c e" を prefix として org-ref も併用する．
 
 #+begin_src emacs-lisp
-  ;;; ebib
+;;; ebib
 (leaf ebib
   :straight t
+  :after org
   :bind
   (("C-c e o" . ebib)
    ("C-c e c" . ebib-insert-citation))
+  :require t
   :custom
   (ebib-bibtex-dialect . "biblatex")
   (ebib-bib-search-dirs . "~/lib/tex/bib")
@@ -1457,8 +1564,8 @@ bibtexとebib/ref-texの連携を整理した方がよい．
   (ebib-keywords-use-only-file . t)
   (ebib-keywords-file . "~/lib/tex/bib/mykeywords.txt")
   (ebib-keywords-file-save-on-exit . 'always)
-  (ebib-citation-commands . (quote ((any (("cite" "\\cite%<[%A]%>{%K}")))
-                                    (org-mode (("cite" "[[cite:%K][%A;%A;%A]]"))))))
+  ;; (ebib-citation-commands . (quote ((any (("cite" "\\cite%<[%A]%>{%K}")))
+  ;;                                   (org-mode (("cite" "[[cite:%K][%A;%A;%A]]"))))))
   :config
   (define-key ebib-multiline-mode-map
     "\C-c\C-c" 'ebib-quit-multiline-buffer-and-save)
@@ -1470,6 +1577,24 @@ bibtexとebib/ref-texの連携を整理した方がよい．
     "Return year field contents as a string obeying `bibtex-autokey-year-length'."
     (let ((yearfield (bibtex-autokey-get-field "date")))
       (substring yearfield 0 bibtex-autokey-year-length)))
+  )
+(leaf org-ebib
+  :straight nil
+  :after ebib org
+  :require t
+  :config
+  (org-link-set-parameters "ebib"
+                           :follow #'org-ebib-open
+                           :export #'org-ebib-export
+                           :store #'org-ebib-store-link)
+  (defun org-ebib-export (path desc format _)
+    "stolen from org-bbdb-export."
+    (when (string= desc (format "ebib:%s" path))
+      (setq desc path))
+    (cond
+     ((eq format 'html) (format "<cite>%s</cite>" desc))
+     ((eq format 'latex) (format "\\cite{%s}" path))
+     (t desc)))
   )
 #+end_src
 
@@ -1526,6 +1651,25 @@ bibtexとebib/ref-texの連携を整理した方がよい．
 基本的な設定は過去を引き摺っているので，
 随時更新が必要．
 
+画像の resize は以下のサイトを参照
+https://stackoverflow.com/questions/36465878/how-to-make-inline-images-responsive-in-org-mode
+以下をconfigに入れる?
+#+begin_src emacs-lisp :tangle no
+(defun org-image-resize (frame)
+  (when (derived-mode-p 'org-mode)
+    (if (< (window-total-width) 80)
+	(setq org-image-actual-width (window-pixel-width))
+      (setq org-image-actual-width (* 80 (window-font-width))))
+    (org-redisplay-inline-images)))
+
+(defun org-image-resize (frame)
+  (when (derived-mode-p 'org-mode)
+    (setq org-image-actual-width (window-pixel-width))
+    (org-redisplay-inline-images)))
+
+(add-hook 'window-size-change-functions 'org-image-resize)  
+#+end_src
+
 #+begin_src emacs-lisp
 ;;; org-mode
 (leaf org
@@ -1545,10 +1689,11 @@ bibtexとebib/ref-texの連携を整理した方がよい．
                         "~/Documents/org/tickler.org"))
   (org-capture-templates . '(("t" "Todo [inbox]" entry ; 一般的なtodo
                               (file "inbox.org") 
-                              "* TODO %^{title} %^g\n  entered on %U\n%?") 
+                              "* TODO %^{title} %^g\nentered on %U\n%?"
+                              :empty-lines 1) 
                              ("T" "Tickler [tickler]" entry ; 厄介な問題
                               (file+headline "tickler.org" "Tickler")
-                              "* %i%? \n %U")
+                              "* %i%? \n%U")
                              ("m" "Memo [notes]" entry ; 雑記
                               (file "notes.org") 
                               "* %^{topic} %T %^g\n%i%?"
@@ -1587,6 +1732,7 @@ bibtexとebib/ref-texの連携を整理した方がよい．
   ;; (org-adapt-indentation t)
   (org-use-speed-commands . t)
   (org-confirm-babel-evaluate . nil) ;; 評価の確認
+  ;; (org-image-actual-width . nil)
   :require org-habit org-tempo
   :config
   ;; (leaf org-habit :straight nil)
@@ -1611,18 +1757,25 @@ bibtexとebib/ref-texの連携を整理した方がよい．
      ;;     (sql . nil)
      ;;     (sqlite . t)
      ))
-  (org-add-link-type 
-   "cite" 'ebib
-   (lambda (path desc format)
-     (cond
-      ((eq format 'html)
-       (format "(<cite>%s</cite>)" path))
-      ((eq format 'latex)
-       (if (or (not desc) (equal 0 (search "cite:" desc)))
-           (format "\\cite{%s}" path)
-         (format "\\cite[%s][%s]{%s}"
-                 (cadr (split-string desc ";"))
-                 (car (split-string desc ";"))  path))))))
+  ;; (org-add-link-type 
+  ;;  "ebib" 'ebib
+  ;;  (lambda (path desc format)
+  ;;    (cond
+  ;;     ((eq format 'html)
+  ;;      (format "(<cite>%s</cite>)" path))
+  ;;     ((eq format 'latex)
+  ;;      (if (or (not desc) (equal 0 (search "ebib:" desc)))
+  ;;          (format "\\cite{%s}" path)
+  ;;        (format "\\cite[%s][%s]{%s}"
+  ;;                (cadr (split-string desc ";"))
+  ;;                (car (split-string desc ";"))  path))))))
+  (defun org-image-resize (frame)
+    (when (derived-mode-p 'org-mode)
+      (if (< (window-total-width) 80)
+          (setq org-image-actual-width (- (window-pixel-width) 40))
+        (setq org-image-actual-width (* 75 (window-font-width))))
+      (org-redisplay-inline-images)))
+  (add-hook 'window-size-change-functions 'org-image-resize)
   )
 #+end_src
 
@@ -1677,6 +1830,14 @@ bibtexとebib/ref-texの連携を整理した方がよい．
   ;;       org-icalendar-include-todo "all"
   ;;       org-icalendar-combined-agenda-file "~/Documents/org/ical.ics")
   )
+;; mac-link
+(leaf org-mac-link
+  :straight org-mac-link
+  :after org
+  :require t
+  :bind (:org-mode-map
+         ("C-c g" . org-mac-grab-link))
+  )
 ;;
 #+end_src
 
@@ -1685,13 +1846,54 @@ org-mode の中で TeX の記述を簡略化するために，
 [[https://github.com/polymode/poly-org][polymode]] を導入．
 R なども使えるので取り敢えず便利．
 時々 mode の認識をミスして indent がずれるのが玉に瑕．
+最近不安定なので使わない設定に変更 <2022-11-22 Tue>
 
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :tangle no
 ;;; poly-mode
 (leaf poly-org
   :straight t 
   :after org
   :require t)
+#+end_src
+
+** DONE screencapture
+org-mode の中で clipboard 上の画像を取り込む．
+こちらを参考 https://dev.classmethod.jp/articles/org-mode-paste-show-clipboard-image/
+
+#+begin_src emacs-lisp
+;;; screenshot on clipboard to inline image
+(leaf *my-screenshot
+  :if (eq system-type 'darwin)
+  :after org-roam
+  :bind (("C-c p" . my-org-screenshot)
+         ("C-c n p" . my-roam-screenshot))
+  :init
+  (defun my-org-screenshot ()
+    "Take a screenshot into a time stamped unique-named file in the same directory as the org-buffer and insert a link to this file."
+    (interactive)
+    (setq filename
+          (concat
+           (make-temp-name
+            (concat (buffer-file-name)
+                    "_"
+                    (format-time-string "%Y%m%d_%H%M%S_")) ) ".png"))
+    (call-process "pngpaste" nil nil nil filename)
+    (insert (concat "[[" filename "]]"))
+    (org-display-inline-images))
+  (defun my-roam-screenshot ()
+    "Save a clipboard's screenshot into a time stamped unique-named file in the org-roam subdirectory and insert a link to this file."
+    (interactive)
+    (setq filename
+          (concat
+           (make-temp-name
+            (concat "/Users/mura/Desktop/memos/figs/"
+                    (buffer-name)
+                    "_"
+                    (format-time-string "%Y%m%d_%H%M%S_")) ) ".png"))
+    (call-process "pngpaste" nil nil nil filename)
+    (insert (concat "[[" filename "]]"))
+    (org-display-inline-images))
+  )
 #+end_src
 
 ** DONE ox関連
@@ -1729,12 +1931,48 @@ hugo と oer-reveal に対応させている．
 	       '("scrbook"
 		 "\\documentclass{scrbook}
                   [NO-DEFAULT-PACKAGES]"
+		 ("\\chapter{%s}" . "\\chapter*{%s}")
+		 ("\\section{%s}" . "\\section*{%s}")
+		 ("\\subsection{%s}" . "\\subsection*{%s}")
+		 ("\\subsubsection{%s}" . "\\subsubsection*{%s}")))
+  (add-to-list 'org-latex-classes
+	       '("scrbook-with-part"
+		 "\\documentclass{scrbook}
+                  [NO-DEFAULT-PACKAGES]"
 		 ("\\part{%s}" . "\\part*{%s}")
 		 ("\\chapter{%s}" . "\\chapter*{%s}")
 		 ("\\section{%s}" . "\\section*{%s}")
 		 ("\\subsection{%s}" . "\\subsection*{%s}")
 		 ("\\subsubsection{%s}" . "\\subsubsection*{%s}")))
+   (add-to-list 'org-latex-classes
+               '("beamer"
+                 "\\documentclass[presentation]{beamer}
+                  [NO-DEFAULT-PACKAGES]"
+                 ("\\section{%s}" . "\\section*{%s}")
+                 ("\\subsection{%s}" . "\\subsection*{%s}")
+                 ("\\subsubsection{%s}" . "\\subsubsection*{%s}")))
   )
+;; for latex header
+(leaf ox-extra
+  :straight org-contrib
+  :after ox-latex
+  :require t
+  :config
+  (ox-extras-activate '(latex-header-blocks ignore-headlines))
+  )
+;; for beamer
+(leaf ox-beamer
+  :straight org
+  :after (org ox-latex)
+  :require t
+  :custom
+  (org-beamer-theme . nil)
+  )
+;; for koma-letter
+(leaf ox-koma-letter
+  :straight org
+  :after (org ox-latex)
+  :require t)
 ;; emacs-reveal
 (leaf org-re-reveal
   :straight (org-re-reveal :type git :host gitlab :repo "oer/org-re-reveal")
@@ -1820,7 +2058,8 @@ HyperCard のように使うことを想定して
   (org-roam-directory . "~/Desktop/roam/")
   (org-roam-graph-viewer . "/usr/bin/open") 
   :config
-  (org-roam-db-autosync-mode))
+  (org-roam-db-autosync-mode)
+  )
 #+end_src
 
 #+begin_src emacs-lisp :tangle no
