@@ -1,12 +1,13 @@
 #+TITLE: init file for emacs
 #+AUTHOR: Noboru Murata
 #+EMAIL: noboru.murata@gmail.com
-#+DATE: Time-stamp: <2022-12-08 14:09:23 mura>
+#+DATE: Time-stamp: <2024-07-03 11:22:02 mura>
 #+STARTUP: hidestars content indent
 #+OPTIONS: date:t H:4 num:nil toc:nil \n:nil
 #+OPTIONS: @:t ::t |:t ^:t -:t f:t *:t TeX:t LaTeX:t 
 #+OPTIONS: skip:nil d:nil todo:t pri:nil tags:not-in-toc
 #+PROPERTY: header-args :tangle "~/etc/emacs.d/init.el"
+#+SEQ_TODO: TODO | DONE
 
 * 基本方針
 - 書き直したら C-c C-v C-t (tangle)
@@ -49,12 +50,15 @@
 
 
 * ファイルヘッダ
+:PROPERTIES:
+:ID:       901F2BAE-1285-477C-99B0-D871B3DD760B
+:END:
 init.el を直接編集することはないが，とりあえず mode などを設定しておく．
 
 #+begin_src emacs-lisp
 ;;; -*- mode: emacs-lisp; coding: utf-8-emacs-unix; indent-tabs-mode: nil -*-
 
-;; Copyright (C) 2002-2021, mura
+;; Copyright (C) 2002-2024, mura
 ;; Author: noboru.murata@gmail.com
 ;; Maintainer: noboru.murata@gmail.com
 ;; Keywords: emacs initialization
@@ -63,11 +67,49 @@ init.el を直接編集することはないが，とりあえず mode などを
 
 * 基本設定
 ** DONE パッケージ管理
+:PROPERTIES:
+:ID:       5DA9C76B-E1E5-43F4-9E23-547816BE4157
+:END:
 package の依存関係は [[https://github.com/raxod502/straight.el][straight.el]] に任せ，
 [[https://github.com/jwiegley/use-package][use-package.el]] を利用して整理する．
-随時 [[https://github.com/conao3/leaf.el][leaf.el]] に移行していく
+随時 [[https://github.com/conao3/leaf.el][leaf.el]] に移行していく．
 
 #+begin_src emacs-lisp
+;;; set up straight.el + use-package.el + leaf.el
+;; bootstrap for straight.el  
+(defvar bootstrap-version)
+(let ((bootstrap-file
+       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
+      (bootstrap-version 5))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/raxod502/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
+;; fallback to use-package 
+(straight-use-package 'use-package)
+(setq straight-use-package-by-default t)
+(setq straight-recipes-gnu-elpa-use-mirror t)
+;; leaf/leaf-keywords
+(straight-use-package 'leaf)
+(leaf *leaf-keywords
+  :config
+  (straight-use-package 'leaf-keywords)
+  (leaf-keywords-init))
+;; hydra/el-patch/blackout
+(leaf hydra :straight t)
+(leaf el-patch :straight t)
+(leaf blackout :straight t)
+#+end_src
+
+*** COMMENT 補遺
+以前の設定など．
+
+hydra/el-patch/blackoutが整理されていない
+#+begin_src emacs-lisp :tangle no
 ;;; set up straight.el + use-package.el + leaf.el
 ;; bootstrap for straight.el  
 (defvar bootstrap-version)
@@ -101,10 +143,46 @@ package の依存関係は [[https://github.com/raxod502/straight.el][straight.e
 #+end_src
 
 ** DONE 環境関数
+:PROPERTIES:
+:ID:       17A7C926-34EB-4C2E-9098-01AFF14891E8
+:END:
 環境の違いを吸収するための関数群．
 そろそろ古いものは気にしなくてもよいかもしれない．
 [[https://github.com/conao3/leaf.el][leaf.el]] には Emacs の version に関する関数は用意されている．
 
+#+begin_src emacs-lisp
+;;; for various environments
+(leaf *user-emacs-directory
+  ;; if user-emacs-directory is not defined (before Emacs 22)
+  :unless (boundp 'user-emacs-directory)
+  :config
+  (defvar user-emacs-directory (expand-file-name "~/.emacs.d/")))
+(leaf *emacs-variables
+  ;; variables for getting environments
+  :config
+  (defun x->bool (elt) (not (not elt)))
+  (defvar darwin-p (eq system-type 'darwin))
+  (defvar ns-p (featurep 'ns))
+  (defvar carbon-p (and (eq window-system 'mac) (eq emacs-major-version 22)))
+  (defvar mac-p (and (eq window-system 'mac) (>= emacs-major-version 23)))
+  (defvar linux-p (eq system-type 'gnu/linux))
+  (defvar colinux-p (when linux-p
+                      (let ((file "/proc/modules"))
+			(and
+			 (file-readable-p file)
+			 (x->bool
+                          (with-temp-buffer
+                            (insert-file-contents file)
+                            (goto-char (point-min))
+                            (re-search-forward "^cofuse\.+" nil t)))))))
+  (defvar cygwin-p (eq system-type 'cygwin))
+  (defvar nt-p (eq system-type 'windows-nt))
+  (defvar meadow-p (featurep 'meadow))
+  (defvar windows-p (or cygwin-p nt-p meadow-p)))
+#+end_src
+
+*** COMMENT 補遺
+以前の設定
 #+begin_src emacs-lisp :tangle no
 ;; functions for get environments (古い)
 (defun x->bool (elt) (not (not elt)))
@@ -134,8 +212,7 @@ package の依存関係は [[https://github.com/raxod502/straight.el][straight.e
 (defvar meadow-p (featurep 'meadow))
 (defvar windows-p (or cygwin-p nt-p meadow-p))
 #+end_src
-
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :tangle no
 ;;; for various environments
 ;; if user-emacs-directory is not defined (before Emacs 22)
 (unless (boundp 'user-emacs-directory)
@@ -162,6 +239,7 @@ package の依存関係は [[https://github.com/raxod502/straight.el][straight.e
 (defvar windows-p (or cygwin-p nt-p meadow-p))
 #+end_src
 
+** DONE 環境変数
 環境変数は shell の設定から取ってくるようにする．
 特殊なものは直接設定．
 
@@ -174,53 +252,174 @@ package の依存関係は [[https://github.com/raxod502/straight.el][straight.e
   ((exec-path-from-shell-check-startup-files . nil)
    (exec-path-from-shell-arguments . nil)
    (exec-path-from-shell-variables
-    . '(
-        "PATH"
+    . '("PATH"
         "SHELL"
         "MANPATH"
         "TEXINPUTS"
         "TEXFONTS"
         "BIBINPUTS"
-        "SSH_AUTH_SOCK"
-        )))
+        "SSH_AUTH_SOCK")))
   :config
-  (exec-path-from-shell-initialize)
-  )
-(setenv "DISPLAY" "localhost")
-(setenv "LC_ALL" "ja_JP.UTF-8")
-(setq system-time-locale "C")
+  (exec-path-from-shell-initialize))
+(leaf *environment-variables
+  ;; specify some environment variables
+  :config
+  (setenv "DISPLAY" "localhost")
+  (setenv "LC_ALL" "ja_JP.UTF-8")
+  (setq system-time-locale "C"))
 #+end_src
 
-以下を入れるかは検討が必要
+*** COMMENT 補遺
+以下を入れるかは検討が必要(とりあえず不要)
 (setenv "R_HOME" "/Library/Frameworks/R.framework/Resources")
 
 ** DONE 文字コード
+:PROPERTIES:
+:ID:       8067601F-393B-4935-899A-EB6CB0859572
+:END:
 基本は utf-8 で設定．
 macOS は若干癖がある．
 
 #+begin_src emacs-lisp
 ;;; use utf-8 encoding
-(set-language-environment "Japanese")
-(prefer-coding-system 'utf-8)
-(set-default-coding-systems 'utf-8-unix)
-(cond
- (mac-p ; for HFS+ file format (macOS) 
-  (leaf ucs-normalize :require t)
-  (setq file-name-coding-system 'utf-8-hfs)
-  (setq locale-coding-system 'utf-8-hfs))
- (windows-p ; for Windos
-  (setq file-name-coding-system 'sjis)
-  (setq locale-coding-system 'utf-8))
- (t ; otherwise
-  (setq file-name-coding-system 'utf-8)
-  (setq locale-coding-system 'utf-8)))
+(leaf *coding-systems
+  :config
+  (set-language-environment "Japanese")
+  (prefer-coding-system 'utf-8)
+  (set-default-coding-systems 'utf-8-unix)
+  (cond
+   (mac-p ; for HFS+ file format (macOS) 
+    (leaf ucs-normalize :require t)
+    (setq file-name-coding-system 'utf-8-hfs)
+    (setq locale-coding-system 'utf-8-hfs))
+   (windows-p ; for Windows
+    (setq file-name-coding-system 'sjis)
+    (setq locale-coding-system 'utf-8))
+   (t ; otherwise
+    (setq file-name-coding-system 'utf-8)
+    (setq locale-coding-system 'utf-8))))
 #+end_src
 
-** TODO 基本操作
+** DONE フォント
+:PROPERTIES:
+:ID:       565B4709-6376-4E51-A951-77D7619CB774
+:END:
+Source Code Pro があれば標準フォントとして利用.
+
+#+begin_src emacs-lisp
+;;; fonts
+(leaf *default-font
+  :if (member "Source Code Pro" (font-family-list))
+  :config
+  (set-face-attribute 'default nil :family "Source Code Pro" :height 180))
+#+end_src
+
+*** COMMENT 補遺
+leaf なしの以前の設定
+#+begin_src emacs-lisp :tangle no
+;;; fonts
+;; set up default font family
+(when (member "Source Code Pro" (font-family-list))
+  (set-face-attribute 'default nil :family "Source Code Pro" :height 180))
+#+end_src
+
+UDEV Gothic NF があれば標準フォントとして利用する場合 (やはり半角が細い)
+
+#+begin_src emacs-lisp :tangle no
+;;; fonts
+(leaf *default-font
+  :if (member "UDEV Gothic NF" (font-family-list))
+  :config
+  (set-face-attribute 'default nil :family "UDEV Gothic NF" :height 180))
+#+end_src
+
+** DONE アイコン
+いくつかのパッケージで利用する [[https://github.com/domtronn/all-the-icons.el][all-the-icons]] を追加.
+フォントの自動インストールについては[[https://github.com/mahito1594/dotemacs][こちら]]を参考にした．
+
+#+begin_src emacs-lisp
+;; install all-the-icons
+(leaf all-the-icons
+  :if (window-system)
+  :straight t
+  :require t
+  :config
+  (unless (member "all-the-icons" (font-family-list))
+    (all-the-icons-install-fonts t)))
+#+end_src
+
+*** COMMENT 補遺
+[[https://pxaka.tokyo/blog/2021/0417-emacs-icons-in-terminal/][icon-in-terminal]]も試してみたい．
+
+** DONE 基本操作
+:PROPERTIES:
+:ID:       29C36678-F4FC-4765-9FB5-9D5168EEBFAD
+:END:
 以下に個別に設定が必要な基本的なものを列挙する．
 もう少し整理が必要．
 
 #+begin_src emacs-lisp
+;;; look & feel
+(leaf *look-feel
+  :hook (before-save-hook . time-stamp) ; add time stamps 
+  :init
+  (leaf ace-window
+    :straight t
+    :bind ("M-o" . ace-window))
+  (leaf transpose-frame
+    :straight t
+    :require t)
+  (leaf beacon
+    :straight t
+    ;; :custom
+    ;;  (beacon-color . "violet")
+    :hook (after-init-hook . beacon-mode))
+  :custom
+  (line-number-mode . t)
+  (column-number-mode . t)
+  (transient-mark-mode . t)
+  (confirm-kill-emacs . 'y-or-n-p)
+  (split-height-threshold . nil)
+  (split-width-threshold . 120))
+#+end_src
+
+*** COMMENT 補遺
+整理前の低
+#+begin_src emacs-lisp :tangle no
+;;; look & feel
+(leaf *look-feel
+  :hook (before-save-hook . time-stamp) ; add time stamps 
+  :custom
+  (line-number-mode . t)
+  (column-number-mode . t)
+  (transient-mark-mode . t)
+  (confirm-kill-emacs . 'y-or-n-p))
+(leaf ace-window
+  :straight t
+  :bind ("M-o" . ace-window))
+(leaf transpose-frame
+  :straight t
+  :require t)
+(leaf *my-windows
+  :custom
+  (split-height-threshold . nil)
+  (split-width-threshold . 120))
+(leaf beacon
+  :straight t
+  ;; :custom
+  ;;  (beacon-color . "violet")
+  :hook (after-init-hook . beacon-mode))
+(leaf atomic-chrome
+  :straight t
+  :init
+  (atomic-chrome-start-server)
+  :custom
+  (atomic-chrome-default-major-mode . 'org-mode)
+  (atomic-chrome-url-major-mode-alist . '(("overleaf\\.com" . tex-mode))))
+#+end_src
+
+古い設定
+#+begin_src emacs-lisp :tangle no
 ;;; look & feel
 (leaf *my-basics
   :config
@@ -235,8 +434,7 @@ macOS は若干癖がある．
   ;; (setq text-mode-hook
   ;;       '(lambda () (auto-fill-mode 1)))
   ;; (remove-hook 'text-mode-hook #'turn-on-auto-fill)
-  (setq confirm-kill-emacs 'y-or-n-p)
-  )
+  (setq confirm-kill-emacs 'y-or-n-p))
 ;; (leaf sr-speedbar
 ;;   :straight t
 ;;   :custom
@@ -250,8 +448,7 @@ macOS は若干癖がある．
 (leaf *my-windows
   :config
   (setq split-height-threshold nil)
-  (setq split-width-threshold 120)
-  )
+  (setq split-width-threshold 120))
 (leaf beacon
   :straight t
   ;; :config
@@ -263,15 +460,33 @@ macOS は若干癖がある．
   (atomic-chrome-start-server)
   :custom
   (atomic-chrome-default-major-mode . 'org-mode)
-  (atomic-chrome-url-major-mode-alist . '(("overleaf\\.com" . tex-mode)))
-)
+  (atomic-chrome-url-major-mode-alist . '(("overleaf\\.com" . tex-mode))))
 #+end_src
 
-** TODO キーバインド
+** DONE キーバインド
+:PROPERTIES:
+:ID:       6C1F64A0-A218-4DF3-BBB4-4F20ADA57D43
+:END:
 
 C-h の設定は悩みどころ．
 
-#+begin_src emacs-lisp 
+#+begin_src emacs-lisp
+;;; keybinds
+(leaf *my-keybind
+  :after hydra
+  :config
+  (global-set-key (kbd "C-h") 'delete-backward-char)
+  (global-set-key (kbd "C-?") 'help-command) 
+  (leaf *my-mac-keybind
+    :if (eq system-type 'darwin)
+    :custom
+    ((ns-command-modifier . 'meta) ; Cmd と Option を逆にする
+     (ns-alternate-modifier . 'super))))
+#+end_src
+
+*** COMMENT 補遺
+以前の設定
+#+begin_src emacs-lisp :tangle no
 ;;; keybinds
 (leaf *my-keybind
   :after hydra
@@ -289,8 +504,11 @@ C-h の設定は悩みどころ．
   )
 #+end_src
 
-** DONE ファイルマネージャ
-
+** TODO ファイルマネージャ
+:PROPERTIES:
+:ID:       C32F7CEC-571E-4D45-BEA9-5664BE4F3E95
+:END:
+*** dired/dired-x
 シンプルに dired を利用．
 [[https://github.com/abo-abo/hydra/wiki/][hydra wiki]] の dired を利用して，
 [[https://github.com/abo-abo/hydra][hydra]] で keybind を呼び出せるように設定．
@@ -371,8 +589,24 @@ _a_: open in        _S_: symlink
   :straight t
   :hook (dired-mode-hook . all-the-icons-dired-mode))
 #+end_src
+*** NeoTree
+NeoTree を導入
+#+begin_src emacs-lisp
+;;; NeoTree
+(leaf neotree
+  :straight t
+  :bind ("<f6>" . neotree-toggle)
+  :config
+  (leaf *neo-theme
+    :if (display-graphic-p)
+    :custom
+    (neo-theme . 'icons)))
+#+end_src
 
-** DONE 補完
+** TODO 補完
+:PROPERTIES:
+:ID:       F2381889-01AE-47CC-BB07-E94D6520A9E6
+:END:
 [[https://github.com/minad/vertico][vertico]] + [[https://github.com/minad/consult][consult]] で構築．
 それぞれの基本設定の例を利用．
 [[https://github.com/minad/consult][consult]] の設定はちょっと煩わしい．
@@ -403,13 +637,16 @@ _a_: open in        _S_: symlink
   (savehist-mode)
   )
 ;; consult
-(leaf consult ;; use example configuration for Consult
+(leaf consult ;; use example configuration for Consult. map: should be rewritten
   :straight t
-  :bind (;; C-c bindings (mode-specific-map)
+  :bind (;; C-c bindings in `mode-specific-map'
+         ("C-c M-x" . consult-mode-command)
          ("C-c h" . consult-history)
-         ("C-c m" . consult-mode-command)
          ("C-c k" . consult-kmacro)
-         ;; C-x bindings (ctl-x-map)
+         ("C-c m" . consult-man)
+         ("C-c i" . consult-info)
+         ([remap Info-search] . consult-info)
+         ;; C-x bindings in `ctl-x-map'
          ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
          ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
          ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
@@ -422,8 +659,7 @@ _a_: open in        _S_: symlink
          ("C-M-#" . consult-register)
          ;; Other custom bindings
          ("M-y" . consult-yank-pop)                ;; orig. yank-pop
-         ("<help> a" . consult-apropos)            ;; orig. apropos-command
-         ;; M-g bindings (goto-map)
+         ;; M-g bindings in `goto-map'
          ("M-g e" . consult-compile-error)
          ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
          ("M-g g" . consult-goto-line)             ;; orig. goto-line
@@ -433,7 +669,7 @@ _a_: open in        _S_: symlink
          ("M-g k" . consult-global-mark)
          ("M-g i" . consult-imenu)
          ("M-g I" . consult-imenu-multi)
-         ;; M-s bindings (search-map)
+         ;; M-s bindings in `search-map'
          ("M-s d" . consult-find)
          ("M-s D" . consult-locate)
          ("M-s g" . consult-grep)
@@ -441,7 +677,6 @@ _a_: open in        _S_: symlink
          ("M-s r" . consult-ripgrep)
          ("M-s l" . consult-line)
          ("M-s L" . consult-line-multi)
-         ("M-s m" . consult-multi-occur)
          ("M-s k" . consult-keep-lines)
          ("M-s u" . consult-focus-lines)
          ;; Isearch integration
@@ -455,7 +690,7 @@ _a_: open in        _S_: symlink
          (minibuffer-local-map
           ("M-s" . consult-history)                 ;; orig. next-matching-history-element
           ("M-r" . consult-history)))                ;; orig. previous-matching-history-element
-	 
+
   ;; Enable automatic preview at point in the *Completions* buffer. This is
   ;; relevant when you use the default completion UI.
   :hook (completion-list-mode . consult-preview-at-point-mode)
@@ -473,9 +708,6 @@ _a_: open in        _S_: symlink
   ;; This adds thin lines, sorting and hides the mode line of the window.
   (advice-add #'register-preview :override #'consult-register-window)
 
-  ;; Optionally replace `completing-read-multiple' with an enhanced version.
-  ;;  (advice-add #'completing-read-multiple :override #'consult-completing-read-multiple)
-
   ;; Use Consult to select xref locations with preview
   (setq xref-show-xrefs-function #'consult-xref
         xref-show-definitions-function #'consult-xref)
@@ -487,22 +719,22 @@ _a_: open in        _S_: symlink
   ;; Optionally configure preview. The default value
   ;; is 'any, such that any key triggers the preview.
   ;; (setq consult-preview-key 'any)
-  ;; (setq consult-preview-key (kbd "M-."))
-  ;; (setq consult-preview-key (list (kbd "<S-down>") (kbd "<S-up>")))
+  ;; (setq consult-preview-key "M-.")
+  ;; (setq consult-preview-key '("S-<down>" "S-<up>"))
   ;; For some commands and buffer sources it is useful to configure the
   ;; :preview-key on a per-command basis using the `consult-customize' macro.
   (consult-customize
-   consult-theme
-   :preview-key '(:debounce 0.2 any)
+   consult-theme :preview-key '(:debounce 0.2 any)
    consult-ripgrep consult-git-grep consult-grep
    consult-bookmark consult-recent-file consult-xref
-   consult--source-bookmark consult--source-recent-file
-   consult--source-project-recent-file
-   :preview-key (kbd "M-."))
+   consult--source-bookmark consult--source-file-register
+   consult--source-recent-file consult--source-project-recent-file
+   ;; :preview-key "M-."
+   :preview-key '(:debounce 0.4 any))
 
   ;; Optionally configure the narrowing key.
   ;; Both < and C-+ work reasonably well.
-  (setq consult-narrow-key "<") ;; (kbd "C-+")
+  (setq consult-narrow-key "<") ;; "C-+"
 
   ;; Optionally make narrowing help available in the minibuffer.
   ;; You may want to use `embark-prefix-help-command' or which-key instead.
@@ -510,17 +742,18 @@ _a_: open in        _S_: symlink
 
   ;; By default `consult-project-function' uses `project-root' from project.el.
   ;; Optionally configure a different project root function.
-  ;; There are multiple reasonable alternatives to chose from.
   ;;;; 1. project.el (the default)
   ;; (setq consult-project-function #'consult--default-project--function)
-  ;;;; 2. projectile.el (projectile-project-root)
+  ;;;; 2. vc.el (vc-root-dir)
+  ;; (setq consult-project-function (lambda (_) (vc-root-dir)))
+  ;;;; 3. locate-dominating-file
+  ;; (setq consult-project-function (lambda (_) (locate-dominating-file "." ".git")))
+  ;;;; 4. projectile.el (projectile-project-root)
   ;; (autoload 'projectile-project-root "projectile")
   ;; (setq consult-project-function (lambda (_) (projectile-project-root)))
-  ;;;; 3. vc.el (vc-root-dir)
-  ;; (setq consult-project-function (lambda (_) (vc-root-dir)))
-  ;;;; 4. locate-dominating-file
-  ;; (setq consult-project-function (lambda (_) (locate-dominating-file "." ".git")))
-  )
+  ;;;; 5. No project support
+  ;; (setq consult-project-function nil)
+)
 ;; marginalia
 (leaf marginalia
   :straight t
@@ -556,7 +789,7 @@ _a_: open in        _S_: symlink
   :hook (embark-collect-mode-hook . consult-preview-at-point-mode)
   :require t)
 #+end_src
-
+*** COMMENT 補遺
 [[https://github.com/raxod502/selectrum][selectrum]] + [[https://github.com/minad/consult][consult]] の場合はこちら．
 
 #+begin_src emacs-lisp :tangle no
@@ -572,75 +805,6 @@ _a_: open in        _S_: symlink
     (prescient-persist-mode +1))
   )
 ;; consult
-(leaf consult
-  :straight t
-  :bind (;; C-c bindings (mode-specific-map)
-         ("C-c h" . consult-history)
-         ("C-c m" . consult-mode-command)
-         ("C-c b" . consult-bookmark)
-         ("C-c k" . consult-kmacro)
-         ;; C-x bindings (ctl-x-map)
-         ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
-         ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
-         ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
-         ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
-         ;; Custom M-# bindings for fast register access
-         ("M-#" . consult-register-load)
-         ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
-         ("C-M-#" . consult-register)
-         ;; Other custom bindings
-         ("M-y" . consult-yank-pop)                ;; orig. yank-pop
-         ("<help> a" . consult-apropos)            ;; orig. apropos-command
-         ;; M-g bindings (goto-map)
-         ("M-g e" . consult-compile-error)
-         ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
-         ("M-g g" . consult-goto-line)             ;; orig. goto-line
-         ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
-         ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
-         ("M-g m" . consult-mark)
-         ("M-g k" . consult-global-mark)
-         ("M-g i" . consult-imenu)
-         ("M-g I" . consult-imenu-multi)
-         ;; M-s bindings (search-map)
-         ("M-s f" . consult-find)
-         ("M-s F" . consult-locate)
-         ("M-s g" . consult-grep)
-         ("M-s G" . consult-git-grep)
-         ("M-s r" . consult-ripgrep)
-         ("M-s l" . consult-line)
-         ("M-s L" . consult-line-multi)
-         ("M-s m" . consult-multi-occur)
-         ("M-s k" . consult-keep-lines)
-         ("M-s u" . consult-focus-lines)
-         ;; Isearch integration
-         ("M-s e" . consult-isearch)
-         (isearch-mode-map
-          ("M-e" . consult-isearch)                 ;; orig. isearch-edit-string
-          ("M-s e" . consult-isearch)               ;; orig. isearch-edit-string
-          ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
-          ("M-s L" . consult-line-multi)))          ;; needed by consult-line to detect isearch
-  :hook (completion-list-mode-hook . consult-preview-at-point-mode)
-  :init
-  (setq register-preview-delay 0
-        register-preview-function #'consult-register-format)
-  (advice-add #'register-preview :override #'consult-register-window)
-  (advice-add #'completing-read-multiple :override #'consult-completing-read-multiple)
-  (setq xref-show-xrefs-function #'consult-xref
-        xref-show-definitions-function #'consult-xref)
-  :config
-  (consult-customize
-   consult-theme
-   :preview-key '(:debounce 0.2 any)
-   consult-ripgrep consult-git-grep consult-grep
-   consult-bookmark consult-recent-file consult-xref
-   consult--source-file consult--source-project-file consult--source-bookmark
-   :preview-key (kbd "M-."))
-  (setq consult-narrow-key "<") ;; (kbd "C-+")
-  (setq consult-project-root-function
-        (lambda ()
-          (when-let (project (project-current))
-            (car (project-roots project)))))
-  )
 ;; marginalia
 (leaf marginalia
   :straight t
@@ -762,25 +926,30 @@ _a_: open in        _S_: symlink
          ("C-o" . hydra-ivy/body)))
 #+end_src
 
+** TODO キーバインド表示
 キーバインドの自動表示は [[https://github.com/justbur/emacs-which-key][which-key]] を利用
 C-h の設定と合わせて，
 C-h-dispatch はいくつか追加した法が使い易いかもしれない．
 
 #+begin_src emacs-lisp
-;; which-key  
+;;; which-key  
 (leaf which-key
   :straight t
   :bind (:which-key-mode-map
-         ("C-x DEL" . which-key-C-h-dispatch)
-         ("C-c DEL" . which-key-C-h-dispatch))
+	 ("C-x <f5>" . which-key-C-h-dispatch)
+	 ("C-c <f5>" . which-key-C-h-dispatch))
   :hook (after-init-hook . which-key-mode)
   :custom
+  ;; (which-key-use-C-h-commands . nil)
   (which-key-popup-type . 'side-window)
-  (which-key-side-window-location . 'bottom)
+  (which-key-side-window-location . 'right)
   :blackout t)
 #+end_src
 
 ** TODO 括弧
+:PROPERTIES:
+:ID:       76373620-3D90-40EC-BB36-99E504FE89DE
+:END:
 [[https://github.com/Fuco1/smartparens][smartparens]] を使用．
 TeX の math-mode については見直しが必要．
 
@@ -796,6 +965,7 @@ TeX の math-mode については見直しが必要．
   :require smartparens-config
   :config
   (sp-local-pair 'latex-mode "\\(" "\\)" :trigger "$" :trigger-wrap "$")
+  (sp-local-pair 'LaTeX-mode "\\(" "\\)" :trigger "$" :trigger-wrap "$")
   (sp-local-pair 'org-mode "\\(" "\\)" :trigger "$" :trigger-wrap "$")
   (sp-local-pair 'org-mode "+" "+" :unless '(sp-point-after-word-p))
   (show-smartparens-global-mode t)
@@ -804,12 +974,15 @@ TeX の math-mode については見直しが必要．
   :blackout t)
 #+end_src
 
-** TODO アウトライン
+** TODO COMMENT アウトライン
+:PROPERTIES:
+:ID:       2EFB9A43-01DD-477F-9D7F-6D76846D2E7E
+:END:
 [[https://github.com/tj64/outline-magic][outline-magic]] の設定．
 少し再考が必要．
+以下の設定は[[ https://mtino1594.hatenablog.com/entry/2019/04/07/200000][こちら]]を参考．
+TeXもorgmodeで書くようになったので取り敢えずコメントアウト．
 
-以下の設定はこちら [fn:1]
-を参考．
 #+begin_src emacs-lisp
 ;;; outline-magic
 (leaf outline-magic 
@@ -863,7 +1036,8 @@ If the current subtree is folded, call `outline-hide-subtree' after move down."
   (advice-add 'outline-move-subtree-down :override #'my-outline-move-subtree-down))
 #+end_src
 
-古い設定の例．
+*** COMMENT 補遺
+古い設定の例
 
 #+begin_src emacs-lisp :tangle no
 (use-package outline :straight nil
@@ -903,46 +1077,74 @@ If the current subtree is folded, call `outline-hide-subtree' after move down."
   )
 #+end_src
 
-** DONE Olivetti
-物書き用モードとして [[https://github.com/rnkn/olivetti][olivetti]] を導入．
+** TODO 外部入力補助
+browserの入力として使うために [[https://github.com/alpha22jp/atomic-chrome][atomic-chrome]] を利用．
 
 #+begin_src emacs-lisp
-;;; Olivetti
-(leaf olivetti
-  :straight t)
+(leaf atomic-chrome
+  :straight t
+  :init
+  (atomic-chrome-start-server)
+  :custom
+  (atomic-chrome-default-major-mode . 'org-mode)
+  (atomic-chrome-url-major-mode-alist . '(("overleaf\\.com" . tex-mode))))
 #+end_src
-
 
 * 表示関係
-** DONE フォント
-Source Code Pro があれば標準フォントとして利用.
-
-#+begin_src emacs-lisp
-;;; fonts
-;; set up default font family
-(when (member "Source Code Pro" (font-family-list))
-  (set-face-attribute 'default nil :family "Source Code Pro" :height 180))
-#+end_src
-
-いくつかのパッケージで利用する all-the-icons を追加.
-フォントの自動インストールについてはこちら [fn:2] を参考にした．
-
-#+begin_src emacs-lisp
-;; install all-the-icons
-(leaf all-the-icons
-  :straight t
-  :if (window-system)
-  :require t
-  :config
-  (unless (member "all-the-icons" (font-family-list))
-    (all-the-icons-install-fonts t)))
-#+end_src
-
-** DONE テーマ
+** TODO テーマ
+:PROPERTIES:
+:ID:       E90F36D2-A346-4AEF-B3B1-2AEADAA816E5
+:END:
 こちら [fn:3] [fn:4]
 を参考にカスタムテーマを切り替えられるように設定．
 
 #+begin_src emacs-lisp
+;;; theme
+(leaf *my-theme
+  ;; cycle custom theme
+  :preface
+  (defun my-theme-cycle ()
+    "Cycle custom theme."
+    (interactive)
+    (disable-theme (car my-curr-theme)) 
+    (setq my-curr-theme (cdr my-curr-theme))
+    (if (null my-curr-theme) (setq my-curr-theme my-themes))
+    (load-theme (car my-curr-theme) t)
+    (message "%s" (car my-curr-theme)))
+  :bind ("<f5>" . my-theme-cycle)
+  :init
+  (leaf dracula-theme :straight t)
+  (leaf grandshell-theme :straight t)
+  (leaf zenburn-theme :straight t)
+  (leaf poet-theme :straight t) ; for olivetti-mode
+  (leaf doom-themes :straight t
+    :custom
+    (doom-themes-enable-bold . t) ; if nil, bold is universally disabled
+    (doom-themes-enable-italic . t) ; if nil, italics is universally disabled
+    (doom-themes-treemacs-theme . "doom-colors") ; use the colorful treemacs theme
+    :config
+    (doom-themes-visual-bell-config) ; enable flashing mode-line on errors
+    ;; (doom-themes-neotree-config) ; enable custom neotree theme
+    ;; (doom-themes-treemacs-config) ; enable custom treemacs theme
+    (doom-themes-org-config)) ; corrects/improves org-mode's native fontification
+  (setq my-themes (list 'dracula
+			'grandshell
+			'doom-Iosvkem
+			'doom-dracula
+			'doom-one
+			'poet
+			'poet-monochrome
+			'poet-dark
+			'zenburn)
+        ) 
+  (setq my-curr-theme my-themes)
+  (load-theme (car my-curr-theme) t))
+#+end_src
+
+*** COMMENT 補遺
+以前の設定など
+
+#+begin_src emacs-lisp :tangle no
 ;;; theme
 ;; (leaf afternoon-theme     :straight t)
 ;; (leaf atom-one-dark-theme :straight t)
@@ -954,6 +1156,7 @@ Source Code Pro があれば標準フォントとして利用.
 ;; (leaf sublime-themes      :straight t)
 ;; (leaf org-beautify-theme  :straight t)
 ;; (leaf color-theme-sanityinc-tomorrow :straight t)
+(leaf dracula-theme :straight t)
 (leaf grandshell-theme :straight t)
 (leaf zenburn-theme :straight t)
 ;; (leaf plan9-theme :straight t) ; alternative for olivetti-mode
@@ -971,7 +1174,8 @@ Source Code Pro があれば標準フォントとして利用.
 ;; cycle custom theme
 (leaf *my-theme-cycle
   :init
-  (setq my-themes (list 'grandshell
+  (setq my-themes (list 'dracula
+                        'grandshell
                         'doom-Iosvkem
                         'doom-dracula
 		        'doom-one
@@ -1060,7 +1264,67 @@ Source Code Pro があれば標準フォントとして利用.
 (load-theme (car my-curr-theme) t)
 #+end_src
 
+** TODO Olivetti
+:PROPERTIES:
+:ID:       6853E68B-BE24-425E-A3EB-C5539E0D22F1
+:END:
+物書き用モードとして [[https://github.com/rnkn/olivetti][olivetti]] を導入．
+
+#+begin_src emacs-lisp
+;;; Olivetti
+(leaf olivetti
+  :straight t)
+#+end_src
+** DONE Perspective
+:PROPERTIES:
+:ID:       60499DEB-F3C8-4000-B80B-20A1ECA26C88
+:END:
+workspaceの機能を使う
+[[https://github.com/nex3/perspective-el]]
+
+#+begin_src emacs-lisp
+;;; perspective
+(leaf perspective
+  :straight t
+  :bind
+  ("C-x C-b" . persp-list-buffers)
+  :custom
+  (persp-mode-prefix-key . "\C-c\M-p")
+  :init
+  (persp-mode))
+#+end_src
+
+*** COMMENT 補遺
+以前の設定はこちら，現在の設定は kbd を展開して簡単にした．
+#+begin_src emacs-lisp
+;;; perspective
+(leaf perspective
+  :straight t
+  :bind
+  ("C-x C-b" . persp-list-buffers)
+  :custom
+  `((persp-mode-prefix-key . ,(kbd "C-c M-p")))
+  ;; :config
+  ;; (customize-set-variable 'persp-mode-prefix-key (kbd "C-c M-p"))
+  :init
+  (persp-mode))
+#+end_src
+
+leaf の custom の展開については[[https://qiita.com/conao3/items/347d7e472afd0c58fbd7][こちら]]を参考にしていろいろ試した．
+#+begin_quote
+  ;; (persp-suppress-no-prefix-key-warning . t)
+  ;; or use a nicer switcher, see below
+  ;; ("C-c C-s" . persp-switch) ; previous keybind was C-x x s
+  `((persp-mode-prefix-key . ,(kbd "C-c C-p")) 
+    ;; (persp-suppress-no-prefix-key-warning . t)
+    )
+  (persp-mode-prefix-key . (kbd "C-c M-p")) ; NG
+#+end_quote
+
 ** DONE 最大化
+:PROPERTIES:
+:ID:       229FC3F2-FB3B-4859-863C-91058A43ACFE
+:END:
 CUI でない場合は最大化 (fullscreen)．
 
 #+begin_src emacs-lisp
@@ -1082,28 +1346,12 @@ CUI でない場合は最大化 (fullscreen)．
   (toggle-fullscreen))
 #+end_src
 
-** TODO Perspective
-workspaceの機能を使う (C-x x) 
-[[https://github.com/nex3/perspective-el]]
-#+begin_src emacs-lisp
-;;; perspective
-(leaf perspective
-  :straight t
-  :bind
-  ("C-x C-b" . persp-list-buffers) ; or use a nicer switcher, see below
-  ;; ("C-c C-s" . persp-switch) ; previous keybind was C-x x s
-  :custom
-  `((persp-mode-prefix-key . ,(kbd "C-c C-p")) 
-    ;; (persp-suppress-no-prefix-key-warning . t)
-    )
-  :init
-  (persp-mode)
-  )
-#+end_src
-
 
 * 言語関係
-** DONE 日本語入力
+** TODO 日本語入力
+:PROPERTIES:
+:ID:       34152513-3F25-4423-893F-DA5F094D2322
+:END:
 [[https://github.com/skk-dev/ddskk][ddskk]] の設定．
 SKKそのものの細かな設定は ".ddskk/init" で行う．
 TeX表記のため，"\"と"$"を特別に扱う．
@@ -1127,7 +1375,10 @@ TeX表記のため，"\"と"$"を特別に扱う．
   (skk-user-directory . "~/.ddskk"))
 #+end_src
 
-** DONE migemo
+** TODO migemo
+:PROPERTIES:
+:ID:       AC7AB9D0-8580-487A-A086-0B4B9430220A
+:END:
 migemo を利用した isearch の設定．
 こちら [fn:5] を参考．
 
@@ -1136,23 +1387,23 @@ migemo を利用した isearch の設定．
 (leaf migemo
   :if (executable-find "cmigemo")
   :straight t
+  :require t
   :custom
   (migemo-command . "cmigemo")
   (migemo-options . '("-q" "--emacs"))
   (migemo-user-dictionary . nil)
   (migemo-regex-dictionary . nil)
   (migemo-coding-system . 'utf-8-unix)
-  :init
+  :config
   (cond
    ((file-exists-p "/usr/local/share/migemo/utf-8/migemo-dict")
     (setq migemo-dictionary "/usr/local/share/migemo/utf-8/migemo-dict"))
    ((file-exists-p "/opt/homebrew/share/migemo/utf-8/migemo-dict")
     (setq migemo-dictionary "/opt/homebrew/share/migemo/utf-8/migemo-dict")))
-  :require t
-  :config
   (migemo-init))
 #+end_src
 
+*** COMMENT 以前の設定 
 #+begin_src emacs-lisp :tangle no
 ;;; migemo
 (use-package migemo
@@ -1177,7 +1428,10 @@ migemo を利用した isearch の設定．
   (migemo-init))
 #+end_src
 
-** DONE 機械翻訳
+** TODO 機械翻訳
+:PROPERTIES:
+:ID:       391187CC-21FC-4EC2-B344-C0585A690F35
+:END:
 [[https://www.deepl.com/][DeepL]] の API を利用したもの．
 api-key のところの書き方は要検討．
 api-url は変更があるようなので注意．
@@ -1201,6 +1455,7 @@ api-url は変更があるようなので注意．
   (setq txl-deepl-api-key my-api-key))
 #+end_src
 
+*** COMMENT 以前の設定
 #+begin_src emacs-lisp :tangle no
 ;;; DeepL
 (setq my-api-key-file "~/etc/api-key")
@@ -1223,9 +1478,51 @@ api-url は変更があるようなので注意．
 
 * TeX関係
 ** TODO auctex
+:PROPERTIES:
+:ID:       EE47DD74-39BF-4FD7-B070-6DC30AEF4D8F
+:END:
 設定が整理できていない．
 
 #+begin_src emacs-lisp
+;;; auctex
+(leaf tex
+  :straight auctex
+  :preface (defun my-LaTeX-add-styles ()
+	     (TeX-run-style-hooks "amsmath" "amssymb" "amsthm" "LATEX"))
+  :hook ((LaTeX-mode-hook . TeX-PDF-mode)
+	 (LaTeX-mode-hook . LaTeX-math-mode)
+	 (LaTeX-mode-hook . outline-minor-mode)
+	 (LaTeX-mode-hook . my-LaTeX-add-styles))
+  :custom
+  (TeX-default-mode . 'japanese-latex-mode)
+  (TeX-engine . 'luatex)
+  ;; (TeX-view-program-list . '(("DVIviewer" "dviout %o")
+  ;; 			     ("PDFviewer" "open %o")))
+  ;; (TeX-view-program-selection . '((output-dvi "DVIviewer")
+  ;;                                 (output-pdf "PDFviewer")))
+  (font-latex-fontify-sectioning . 1.0)
+  (font-latex-fontify-script . nil)
+  (TeX-electric-sub-and-superscript . t)
+  (TeX-parse-self . t)
+  (reftex-plug-into-AUCTeX . t)
+  (kinsoku-limit . 10)
+  (reftex-insert-label-flags . '("s" "sfte"))
+  (reftex-label-alist . '((nil ?e nil "\\eqref{%s}" nil nil)))
+  (reftex-default-bibliography . '("~/lib/tex/bib/library.bib"))
+  :config
+  (add-to-list 'TeX-command-list
+               '("PDF Tools"
+                 "TeX-pdf-tools-sync-view"
+                 TeX-run-discard-or-function t t :help "Run PDF Tools"))
+  (leaf auctex-latexmk
+    :straight t
+    :after tex
+    :config
+    (auctex-latexmk-setup))
+  )
+#+end_src
+
+#+begin_src emacs-lisp :tangle no
 ;;; auctex
 (leaf tex
   :straight auctex
@@ -1269,10 +1566,10 @@ api-url は変更があるようなので注意．
   :custom
   (TeX-default-mode . 'japanese-latex-mode)
   (TeX-engine . 'luatex)
-  (TeX-view-program-list . '(("DVIviewer" "dviout %o")
-			     ("PDFviewer" "open %o")))
-  (TeX-view-program-selection . '((output-dvi "DVIviewer")
-                                  (output-pdf "PDFviewer")))
+  ;; (TeX-view-program-list . '(("DVIviewer" "dviout %o")
+  ;; 			     ("PDFviewer" "open %o")))
+  ;; (TeX-view-program-selection . '((output-dvi "DVIviewer")
+  ;;                                 (output-pdf "PDFviewer")))
   (font-latex-fontify-sectioning . 1.0)
   (font-latex-fontify-script . nil)
   (TeX-electric-sub-and-superscript . t)
@@ -1284,7 +1581,7 @@ api-url は変更があるようなので注意．
   :config
   (leaf auctex-latexmk
     :straight t
-    :after auctex
+    :after tex
     :config
     (auctex-latexmk-setup))
   ;; (setq TeX-view-program-list '(("DVIviewer" "dviout %o")
@@ -1352,10 +1649,10 @@ api-url は変更があるようなので注意．
   :custom
   (TeX-default-mode 'japanese-latex-mode)
   (TeX-engine 'luatex)
-  (TeX-view-program-list '(("DVIviewer" "dviout %o")
-			   ("PDFviewer" "open %o")))
-  (TeX-view-program-selection '((output-dvi "DVIviewer")
-                                (output-pdf "PDFviewer")))
+  ;; (TeX-view-program-list '(("DVIviewer" "dviout %o")
+  ;; 			   ("PDFviewer" "open %o")))
+  ;; (TeX-view-program-selection '((output-dvi "DVIviewer")
+  ;;                               (output-pdf "PDFviewer")))
   (font-latex-fontify-sectioning 1.0)
   (font-latex-fontify-script nil)
   (TeX-electric-sub-and-superscript t)
@@ -1431,10 +1728,10 @@ api-url は変更があるようなので注意．
   ;; reftex
   (add-hook 'LaTeX-mode-hook 'turn-on-reftex)
   :config
-  (setq TeX-view-program-list '(("DVIviewer" "dviout %o")
-				("PDFviewer" "open %o")))
-  (setq TeX-view-program-selection '((output-dvi "DVIviewer")
-                                     (output-pdf "PDFviewer")))
+  ;; (setq TeX-view-program-list '(("DVIviewer" "dviout %o")
+  ;; 				("PDFviewer" "open %o")))
+  ;; (setq TeX-view-program-selection '((output-dvi "DVIviewer")
+  ;;                                    (output-pdf "PDFviewer")))
   (setq font-latex-fontify-sectioning 1.0)
   (setq font-latex-fontify-script nil)
   (setq TeX-electric-sub-and-superscript t)
@@ -1472,6 +1769,9 @@ api-url は変更があるようなので注意．
 ;; (straight-use-package '(auctex-latexmk :local-repo "auctex-latexmk"))
 
 ** TODO bibtex
+:PROPERTIES:
+:ID:       17DFADC7-624B-4F7C-83CD-39049D290710
+:END:
 biblatex用に設定．
 bibtexとebib/ref-texの連携を整理した方がよい．
 
@@ -1539,6 +1839,9 @@ bibtexとebib/ref-texの連携を整理した方がよい．
 #+end_src
 
 ** TODO ebib
+:PROPERTIES:
+:ID:       B92BE9A6-29BA-4741-97A3-CB658404B5E9
+:END:
 文献管理はbiblatexに対応しているebibを利用．
 "C-c e" を prefix として org-ref も併用する．
 
@@ -1633,6 +1936,9 @@ bibtexとebib/ref-texの連携を整理した方がよい．
 
 * R関係
 ** DONE ESS
+:PROPERTIES:
+:ID:       86903F0A-CE19-4315-A779-02AF9EA59CA4
+:END:
 とりあえず [[https://ess.r-project.org/index.php?Section=home][ESS]] に落ち着いている．
 
 #+begin_src emacs-lisp
@@ -1640,14 +1946,15 @@ bibtexとebib/ref-texの連携を整理した方がよい．
 (leaf ess
   :straight t
   :mode (("\\.[rR]$" . R-mode))
-  :commands (R-mode R)
-  :config
-  )
+  :commands (R-mode R))
 #+end_src
 
 
 * Org関係
 ** DONE 本体
+:PROPERTIES:
+:ID:       D279FE39-EFAC-4D15-8799-5D38189A7314
+:END:
 基本的な設定は過去を引き摺っているので，
 随時更新が必要．
 
@@ -1682,6 +1989,8 @@ https://stackoverflow.com/questions/36465878/how-to-make-inline-images-responsiv
   :hook ((org-babel-after-execute-hook . org-display-inline-images)   
          (org-mode-hook . org-display-inline-images))
   :custom
+  (org-id-link-to-org-use-id . t)
+  (org-highlight-latex-and-related . '(latex script entities))
   (org-directory . "~/Documents/org/")
   (org-agenda-files . '("~/Documents/org/inbox.org"
                         "~/Documents/org/ical.org"
@@ -1780,17 +2089,29 @@ https://stackoverflow.com/questions/36465878/how-to-make-inline-images-responsiv
 #+end_src
 
 ** DONE 拡張
+:PROPERTIES:
+:ID:       FF780DE9-33E9-4956-83F5-97E16F832F87
+:END:
 こまごました package を追加中．
 
 #+begin_src emacs-lisp
 ;; download
 (leaf org-download :straight t)
+;; for org-noter-nov/djvu
+(leaf nov :straight t)
+(leaf djvu :straight t)
 ;; pdfview (replaced with org-pdftools)
 ;; (leaf org-pdfview :straight t)
 (leaf org-pdftools
   :straight t
   :hook (org-mode-hook . org-pdftools-setup-link)
   :require t)
+;; cdlatex
+;;   (leaf cdlatex
+;;     :straight t
+;;     :after org
+;;     :hook (org-mode-hook . turn-on-org-cdlatex)
+;;     :require t)
 ;; bullets
 ;; (leaf org-bullets :straight t
 ;;   :hook (org-mode-hook . org-bullets-mode))
@@ -1809,7 +2130,7 @@ https://stackoverflow.com/questions/36465878/how-to-make-inline-images-responsiv
 ;; journal
 (leaf org-journal
   :straight (org-journal :type git :host github
-			 :repo "bastibe/org-journal")
+  			 :repo "bastibe/org-journal")
   ;; :defer t
   :custom
   (org-journal-dir . "~/Documents/org/journal/")
@@ -1838,10 +2159,23 @@ https://stackoverflow.com/questions/36465878/how-to-make-inline-images-responsiv
   :bind (:org-mode-map
          ("C-c g" . org-mac-grab-link))
   )
-;;
+;; add-org-task-to-reminder
+(leaf *org-reminders
+  :preface
+  (defun add-org-task-to-reminder ()
+    (interactive)
+    (when (eq major-mode 'org-mode)
+      (setq reminder-list-name "Work")
+      (setq element (org-element-at-point))              ;; カーソル位置のタスク(エレメント)を取得する
+      (setq title (org-element-property :title element)) ;; そのタスク(エレメント)から名前を取得する
+      (setq command (format "reminders add %s '%s'" reminder-list-name title))
+      (shell-command-to-string command))
+    )
+  :bind ("C-c r" . add-org-task-to-reminder)
+  )
 #+end_src
 
-** DONE poly-org
+** TODO COMMENT poly-org
 org-mode の中で TeX の記述を簡略化するために，
 [[https://github.com/polymode/poly-org][polymode]] を導入．
 R なども使えるので取り敢えず便利．
@@ -1857,17 +2191,17 @@ R なども使えるので取り敢えず便利．
 #+end_src
 
 ** DONE screencapture
+:PROPERTIES:
+:ID:       5B827C0A-BAF7-46F3-ABDE-59558E702EBE
+:END:
 org-mode の中で clipboard 上の画像を取り込む．
-こちらを参考 https://dev.classmethod.jp/articles/org-mode-paste-show-clipboard-image/
+[[https://dev.classmethod.jp/articles/org-mode-paste-show-clipboard-image/][こちら]]を参考．
 
 #+begin_src emacs-lisp
 ;;; screenshot on clipboard to inline image
 (leaf *my-screenshot
   :if (eq system-type 'darwin)
-  :after org-roam
-  :bind (("C-c p" . my-org-screenshot)
-         ("C-c n p" . my-roam-screenshot))
-  :init
+  :preface
   (defun my-org-screenshot ()
     "Take a screenshot into a time stamped unique-named file in the same directory as the org-buffer and insert a link to this file."
     (interactive)
@@ -1893,10 +2227,16 @@ org-mode の中で clipboard 上の画像を取り込む．
     (call-process "pngpaste" nil nil nil filename)
     (insert (concat "[[" filename "]]"))
     (org-display-inline-images))
+  :after org
+  :bind (("C-c p" . my-org-screenshot)
+         ("C-c n p" . my-roam-screenshot))
   )
 #+end_src
 
 ** DONE ox関連
+:PROPERTIES:
+:ID:       C2BBDB84-C84A-412F-8B96-B321D1A57455
+:END:
 hugo と oer-reveal に対応させている．
 
 #+begin_src emacs-lisp
@@ -1967,6 +2307,7 @@ hugo と oer-reveal に対応させている．
   :require t
   :custom
   (org-beamer-theme . nil)
+  (org-beamer-environments-extra . '(("lemma" "l" "\\begin{lemma}%a[%h]%l" "\\end{lemma}") ("corollary" "r" "\\begin{corollary}%a[%h]%l" "\\end{corollary}")))
   )
 ;; for koma-letter
 (leaf ox-koma-letter
@@ -2026,10 +2367,34 @@ hugo と oer-reveal に対応させている．
 #+end_src
 
 ** DONE org-roam
+:PROPERTIES:
+:ID:       7A6157FB-DA7B-4A8F-B315-66A39C73492B
+:END:
 HyperCard のように使うことを想定して
 とりあえず入れてみる．
 
 #+begin_src emacs-lisp
+(leaf org-roam
+  :straight t
+  :custom
+  (org-roam-directory . "~/Desktop/roam/")
+  ;; (org-roam-directory . (file-truename "~/Desktop/roam/"))
+  :bind (("C-c n l" . org-roam-buffer-toggle)
+         ("C-c n f" . org-roam-node-find)
+         ("C-c n g" . org-roam-graph)
+         ("C-c n i" . org-roam-node-insert)
+         ("C-c n c" . org-roam-capture)
+         ;; Dailies
+         ("C-c n j" . org-roam-dailies-capture-today))
+  :config
+  ;; If you're using a vertical completion framework, you might want a more informative completion interface
+  (setq org-roam-node-display-template (concat "${title:*} " (propertize "${tags:10}" 'face 'org-tag)))
+  (org-roam-db-autosync-mode)
+  ;; If using org-roam-protocol
+  (require 'org-roam-protocol))
+#+end_src
+
+#+begin_src emacs-lisp :tangle no 
 ;;;
 (leaf org-roam 
   :straight t
@@ -2084,6 +2449,9 @@ HyperCard のように使うことを想定して
 #+end_src
 
 ** DONE org-agenda のための hydra
+:PROPERTIES:
+:ID:       D86C0939-FC90-4C92-81D4-8A0EBBDAC1D5
+:END:
 [[https://github.com/abo-abo/hydra/wiki/][hydra wiki]] の設定を利用．
 
 #+begin_src emacs-lisp
@@ -2173,6 +2541,9 @@ _vr_ reset      ^^                       ^^                 ^^
 #+end_src
 
 ** DONE org-clock のための hydra
+:PROPERTIES:
+:ID:       D5A4A4C5-F891-4636-B44D-A8055B2B31F9
+:END:
 [[https://github.com/abo-abo/hydra/wiki/][hydra wiki]] の設定を利用．
 
 #+begin_src emacs-lisp
@@ -2215,6 +2586,9 @@ _vr_ reset      ^^                       ^^                 ^^
 
 * PDF関連
 ** DONE PDF-Tools
+:PROPERTIES:
+:ID:       BB31E7F9-3CFF-4430-B610-7B07F76E76EB
+:END:
 [[https://github.com/abo-abo/hydra/wiki/][hydra wiki]] の PDF-Tools の例を利用して，
 [[https://github.com/abo-abo/hydra][hydra]] で keybind を表示．
 
@@ -2300,6 +2674,9 @@ _vr_ reset      ^^                       ^^                 ^^
 
 
 * TODO 後始末
+:PROPERTIES:
+:ID:       98A8B330-7B80-48F2-9A1C-F8408B342E88
+:END:
 
 こちらを参考[fn:3]
 にして custom.el の後始末．
